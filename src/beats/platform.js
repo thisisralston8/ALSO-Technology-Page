@@ -29,6 +29,7 @@
 let THREE = null;
 import { createLineReveal } from '../lineReveal.js';
 import { span as gridSpan } from '../grid.js';
+import { MODAL_CONTENT_DEFAULTS, MODAL_CONTENT_MOBILE } from '../modalContent.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
@@ -615,6 +616,10 @@ export const PLATFORM_DEFAULTS = {
   modalBg: '#ecebe8',
   modalBgOpacity: 1,       // 0–1: below 1 the dimmed, blurred section shows through
   modalInk: '#0b0b0b',
+  modalPad: 0,             // px inside the card, round its content (the Figma frames have none)
+  modalMediaRadius: 16,    // px corners on the images and videos
+  // What fills each image slot, its shape and its crop (modalContent.js).
+  ...MODAL_CONTENT_DEFAULTS,
 
   // Layer text
   textCol: 2,              // on the layout grid: first column (1-based)…
@@ -674,7 +679,8 @@ export const PLATFORM_DEFAULTS = {
    each layer's text sits at the top of the screen, across the whole 4-column
    grid, and the platform centred below it. */
 export const PLATFORM_MOBILE = {
-  modalCol: 1, modalSpan: 4, modalMargin: 24, modalTitleSize: 30, modalCloseSize: 48, modalCloseBottom: 20,
+  modalCol: 1, modalSpan: 4, modalMargin: 24, modalTitleSize: 44, modalCloseSize: 48, modalCloseBottom: 20,
+  ...MODAL_CONTENT_MOBILE,
   heroSize: 28,
   heroCol: 1, heroSpan: 4,
   textCol: 1, textSpan: 4,

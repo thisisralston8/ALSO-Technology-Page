@@ -9,6 +9,23 @@
    its settings under `params.*`, matching the upstream model). Add a control by
    adding an entry here — never by writing DOM by hand. */
 
+import { MODAL_LAYERS, MODAL_SLOTS, RATIOS, mediaKey, ratioKey, focusXKey, focusYKey } from '../modalContent.js';
+
+/* The Explore modal's content: a group per layer, and under it each image
+   slot — what fills it, its shape and its crop. Desktop and Mobile (the
+   panel's switch) each have their own; Mobile starts from the Figma phone
+   shapes. */
+const modalContentRows = () => MODAL_LAYERS.flatMap((l) => [
+  { group: l.name, note: `The ${l.name} card, after the Figma frames. Each slot takes an image or a video (muted, looping while it's on screen). Switch Desktop / Mobile at the top of the panel to set the phone's file and shape.` },
+  ...MODAL_SLOTS.filter((sl) => sl.layer === l.name).flatMap((sl) => [
+    { sub: sl.label },
+    { p: mediaKey(sl.id), label: 'Image or video', type: 'media' },
+    { p: ratioKey(sl.id), label: 'Shape', type: 'seg', wrap: true, options: RATIOS.map((r) => [r, r === 'auto' ? 'File' : r]), hint: 'File: the image or video’s own shape' },
+    { p: focusXKey(sl.id), label: 'Crop focus across', min: 0, max: 100, step: 1, unit: '%', when: (c) => !!c[mediaKey(sl.id)] && c[ratioKey(sl.id)] !== 'auto' },
+    { p: focusYKey(sl.id), label: 'Crop focus down', min: 0, max: 100, step: 1, unit: '%', when: (c) => !!c[mediaKey(sl.id)] && c[ratioKey(sl.id)] !== 'auto' },
+  ]),
+]);
+
 export const SCHEMA = {
   /* Each section: `part` headings in roughly the order things happen on the
      page, collapsible `group`s under them, `sub` labels inside long groups.
@@ -358,10 +375,15 @@ export const SCHEMA = {
     { p: 'modalMargin', label: 'Space above & below', min: 0, max: 240, step: 1, unit: 'px', hint: 'The card is centred; long content scrolls inside it' },
     { p: 'modalRadius', label: 'Corners', min: 0, max: 48, step: 1, unit: 'px' },
     { p: 'modalOriginPad', label: 'Starts round the text by', min: 0, max: 60, step: 1, unit: 'px' },
-    { p: 'modalTitleSize', label: 'Headline size', min: 14, max: 96, step: 1, unit: 'px' },
+    { p: 'modalTitleSize', label: 'Headline size', min: 14, max: 160, step: 1, unit: 'px', hint: 'Figma: 96 desktop, 44 phone' },
+    { p: 'modalPad', label: 'Padding inside', min: 0, max: 120, step: 1, unit: 'px', hint: 'Round the content. The Figma frames have none: the card’s columns are the content width' },
+    { p: 'modalMediaRadius', label: 'Image corners', min: 0, max: 48, step: 1, unit: 'px' },
     { p: 'modalBg', label: 'Card', type: 'color' },
     { p: 'modalBgOpacity', label: 'Card opacity', min: 0, max: 1, step: 0.01, hint: 'Below 1 the dimmed, blurred section shows through the card' },
     { p: 'modalInk', label: 'Text', type: 'color' },
+
+    { part: 'Modal content' },
+    ...modalContentRows(),
 
     { part: 'Look' },
     { group: 'Layer text layout', note: 'Shared by the three layers: headline, text and button. Across, on the layout grid.' },

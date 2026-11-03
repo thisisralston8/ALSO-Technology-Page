@@ -4,11 +4,12 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { optimizeAll, optimizeImage, optimizeVideo } from './scripts/optimize-media.mjs';
+import { optimizeAll, optimizeImage, optimizeVideo, optimizeModal } from './scripts/optimize-media.mjs';
 
 const DEFAULTS = fileURLToPath(new URL('./src/defaults.json', import.meta.url));
 const BACKUP = fileURLToPath(new URL('./src/defaults.prev.json', import.meta.url));
 const VIDEO_DIR = fileURLToPath(new URL('./src/assets/video/', import.meta.url));
+const MODAL_DIR = fileURLToPath(new URL('./src/assets/modal/', import.meta.url));
 // Uploads land here first, outside anything Vite watches, and are moved into
 // place only once both files are complete.
 const UPLOAD_TMP = fileURLToPath(new URL('./node_modules/.also-uploads/', import.meta.url));
@@ -97,6 +98,58 @@ function uploadVideo() {
   };
 }
 
+/* "Upload image or video…" on a slot in the Explore modal's controls. Like
+   uploadVideo: one request for an image; for a video, its poster (a JPEG of
+   an early frame, made in the browser) then the video. Everything lands in
+   src/assets/modal/ (posters in modal/posters/), which main.js globs, so the
+   page reloads with the new file in the list. Names are unique across kinds:
+   `pcb.jpg` and `pcb.mp4` can't both exist, since settings refer to a file
+   by its name without the extension. */
+const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
+
+function uploadMedia() {
+  return {
+    name: 'upload-media',
+    configureServer(server) {
+      server.middlewares.use('/__upload-media', async (req, res) => {
+        const fail = (code, error) => {
+          res.statusCode = code;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ ok: false, error }));
+        };
+        if (req.method !== 'POST') return fail(405, 'POST only');
+        const q = new URL(req.url, 'http://x').searchParams;
+        const stem = q.get('stem') || '';
+        const part = q.get('part');
+        const ext = (q.get('ext') || '').toLowerCase();
+        if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(stem)) return fail(400, 'bad name');
+        if (part !== 'poster' && part !== 'file') return fail(400, 'bad part');
+        if (part === 'file' && ![...IMAGE_EXT, ...VIDEO_EXT].includes(ext)) return fail(400, `use ${[...IMAGE_EXT, ...VIDEO_EXT].join(', ')}`);
+        if (+req.headers['content-length'] > MAX_BYTES) return fail(413, 'over 1 GB');
+        try {
+          await mkdir(UPLOAD_TMP, { recursive: true });
+          await mkdir(MODAL_DIR + 'posters/', { recursive: true });
+          const tmp = UPLOAD_TMP + (part === 'poster' ? `modal-${stem}.poster.jpg` : `modal-${stem}.${ext}`);
+          if (part === 'file') {
+            const exists = await Promise.any([...IMAGE_EXT, ...VIDEO_EXT].map((e) => access(MODAL_DIR + `${stem}.${e}`))).then(() => true, () => false);
+            if (exists) { req.resume(); return fail(409, 'a file with that name already exists'); }
+          }
+          await pipeline(req, createWriteStream(tmp));
+          if (part === 'file') {
+            // The poster first, so the reload finds it with its video.
+            await rename(UPLOAD_TMP + `modal-${stem}.poster.jpg`, MODAL_DIR + `posters/${stem}.jpg`).catch(() => {});
+            await rename(tmp, MODAL_DIR + `${stem}.${ext}`);
+          }
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ ok: true, stem }));
+        } catch (e) {
+          fail(500, String(e.message || e));
+        }
+      });
+    },
+  };
+}
+
 /* Optimized media (scripts/optimize-media.mjs): brought up to date when the
    dev server starts and before every build, and for each new or changed file
    in src/assets/traffic or video while the server runs — so dropping
@@ -126,6 +179,7 @@ function optimizedMedia() {
         if (rel.startsWith('..') || path.basename(file).startsWith('.')) return;
         if (dir === 'traffic') enqueue(() => optimizeImage(file, dir, log));
         else if (dir === 'video') enqueue(() => optimizeVideo(file, log));
+        else if (dir === 'modal' && path.dirname(rel) === 'modal') enqueue(() => optimizeModal(file, log));
       };
       server.watcher.on('add', onFile);
       server.watcher.on('change', onFile);
@@ -134,5 +188,5 @@ function optimizedMedia() {
 }
 
 export default defineConfig({
-  plugins: [saveDefaults(), uploadVideo(), optimizedMedia()],
+  plugins: [saveDefaults(), uploadVideo(), uploadMedia(), optimizedMedia()],
 });

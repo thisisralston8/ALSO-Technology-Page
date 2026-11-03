@@ -10,7 +10,7 @@ import { exportAll, importAll, reset, loadView, saveView } from './store.js';
 import { cleanSvg } from '../svgIcon.js';
 import './inspector.css';
 
-export function createInspector({ director, images, onChange, getConfig, extras = [], onSaveDefaults = null, onUploadVideo = null, phoneQuery = '(max-width: 1023px)', sheetQuery = '(max-width: 767px)' }) {
+export function createInspector({ director, images, media = [], onChange, getConfig, extras = [], onSaveDefaults = null, onUploadVideo = null, onUploadMedia = null, phoneQuery = '(max-width: 1023px)', sheetQuery = '(max-width: 767px)' }) {
   /* Desktop | Mobile. Every section's settings are its desktop values plus a
      `mobile` set of overrides (main.js applies them below the phone
      breakpoint). In Mobile mode a control shows and edits the phone value; a
@@ -534,7 +534,7 @@ export function createInspector({ director, images, onChange, getConfig, extras 
 
     if (row.type === 'seg') {
       const seg = document.createElement('div');
-      seg.className = 'seg';
+      seg.className = row.wrap ? 'seg seg--wrap' : 'seg';
       const sync = () => seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(read())));
       row.options.forEach(([v, text]) => {
         const b = document.createElement('button');
@@ -587,6 +587,69 @@ export function createInspector({ director, images, onChange, getConfig, extras 
           try {
             const out = await onUploadVideo(f, (t) => { status.textContent = t; });
             if (!out.saved) { status.textContent = 'Playing from the file for this visit only — a static build can’t save it.'; renderBody(); }
+          } catch (e) {
+            status.textContent = String(e.message || e);
+            status.classList.add('is-error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+        wrap.append(btn, file, status);
+      }
+      if (row.hint) { const h = document.createElement('small'); h.textContent = row.hint; wrap.appendChild(h); }
+      return wrap;
+    }
+
+    if (row.type === 'media') {
+      // An image or video for one of the Explore modal's slots: the files in
+      // src/assets/modal, by thumbnail (videos by poster, marked ▶), plus an
+      // upload button and a way back to the empty placeholder. Stored by name.
+      const grid = document.createElement('div');
+      grid.className = 'thumbs';
+      const sync = () => grid.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.stem === (read() || '')));
+      media.forEach((it) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.stem = it.stem;
+        b.title = `${it.stem} (${it.kind})`;
+        if (it.thumb) b.style.backgroundImage = `url(${it.thumb})`;
+        if (it.kind === 'video') { b.classList.add('is-video'); b.textContent = '▶'; }
+        b.addEventListener('click', () => write(it.stem));
+        grid.appendChild(b);
+      });
+      const none = document.createElement('button');
+      none.type = 'button';
+      none.dataset.stem = '';
+      none.className = 'is-none';
+      none.title = 'None: an empty placeholder card';
+      none.textContent = 'None';
+      none.addEventListener('click', () => write(''));
+      grid.appendChild(none);
+      sync();
+      syncers.push(sync);
+      wrap.classList.add('ctl--stack');
+      wrap.append(label, grid);
+      if (onUploadMedia) {
+        const file = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*,video/*,.mov,.mp4,.webm,.m4v', hidden: true });
+        const btn = document.createElement('button');
+        btn.className = 'upload';
+        btn.type = 'button';
+        btn.textContent = 'Upload image or video…';
+        const status = document.createElement('small');
+        btn.addEventListener('click', () => file.click());
+        file.addEventListener('change', async () => {
+          const f = file.files[0];
+          file.value = '';
+          if (!f) return;
+          btn.disabled = true;
+          status.classList.remove('is-error');
+          const was = cfgOf(id);
+          try {
+            const out = await onUploadMedia(f, (t) => { status.textContent = t; }, (stem) => {
+              write(stem);
+              return () => onChange(id, was);
+            });
+            if (!out.saved) { status.textContent = 'Showing from the file for this visit only — a static build can’t save it.'; renderBody(); }
           } catch (e) {
             status.textContent = String(e.message || e);
             status.classList.add('is-error');

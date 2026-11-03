@@ -23,7 +23,7 @@ import { createGrain, GRAIN_DEFAULTS } from './grain.js';
 import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
 import { GRID_DEFAULTS, GRID_MOBILE, setGrid, showGridOverlay } from './grid.js';
 import { load as loadSaved, save as saveState, saveDefaults, loadView, watch } from './editor/store.js';
-import { videoUploader } from './editor/upload.js';
+import { videoUploader, mediaUploader } from './editor/upload.js';
 import savedDefaults from './defaults.json';
 
 gsap.registerPlugin(ScrollTrigger, Observer);
@@ -77,6 +77,21 @@ const videos = Object.entries(videoUrls).sort().map(([path, src]) => {
   const stem = fileStem(path);
   const best = (phoneAtLoad && optimizedVideo[`${stem}.mobile`]) || optimizedVideo[`${stem}.desktop`] || src;
   return { stem, src: best, poster: posterUrls[stem] || '' };
+});
+
+// The Explore modal's images and videos: everything in assets/modal, by
+// name. "Upload image or video…" on a slot adds to this folder. Each is shown
+// from its optimized copy (a 2400 px JPEG; the phone or desktop MP4), else
+// the original. A video's poster is the same-named JPEG in modal/posters.
+const modalGlob = import.meta.glob('./assets/modal/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP,mp4,mov,webm,m4v,MP4,MOV}', { eager: true, query: '?url', import: 'default' });
+const modalPosters = byStem(import.meta.glob('./assets/modal/posters/*.jpg', { eager: true, query: '?url', import: 'default' }));
+const modalOptimized = byStem(import.meta.glob('./assets/optimized/modal/*.{jpg,mp4}', { eager: true, query: '?url', import: 'default' }));
+const modalMedia = Object.entries(modalGlob).sort().map(([p, src]) => {
+  const stem = fileStem(p);
+  const kind = /\.(mp4|mov|webm|m4v)$/i.test(p) ? 'video' : 'image';
+  if (kind === 'image') { const best = modalOptimized[stem] || src; return { stem, kind, src: best, thumb: best, poster: '' }; }
+  const best = (phoneAtLoad && modalOptimized[`${stem}.mobile`]) || modalOptimized[`${stem}.desktop`] || src;
+  return { stem, kind, src: best, thumb: modalPosters[stem] || '', poster: modalPosters[stem] || '' };
 });
 
 /* ---------- scroll ---------- */
@@ -216,7 +231,7 @@ const director = createDirector({
    platform's current `modal*` settings each time it opens. */
 
 const modal = createModal({
-  gsap, lenis,
+  gsap, lenis, media: modalMedia,
   // Reading on to another layer: the section behind moves to it, so the
   // modal closes onto the right view. Lenis is stopped while the modal is
   // open, so this moves the page's own scroll position (ScrollTrigger
@@ -256,6 +271,8 @@ function apply(id) {
     if (gridChanged) director.relayout();
   } else {
     director.setConfig(id, eff);
+    // An open modal shows edits to its content as they're made.
+    if (id === 'platform') modal.setConfig(eff);
     // Traffic's hero lane hangs off where Open road leaves its square.
     if (id === 'open-road') director.byId('traffic')?.api.relayout();
   }
@@ -289,6 +306,8 @@ const inspector = embedded ? null : createInspector({
   extras: [pageEntry],
   // Only the dev server can write the file; a static build has no endpoint.
   onSaveDefaults: import.meta.env.DEV ? () => saveDefaults(currentSettings()) : null,
+  media: modalMedia,
+  onUploadMedia: mediaUploader({ library: modalMedia, persist: import.meta.env.DEV }),
   onUploadVideo: videoUploader({ getConfig: () => authored['open-road'], onChange: (next) => onChange('open-road', next), saveState, persist: import.meta.env.DEV }),
   getConfig: (id) => authored[id],
   onChange,
@@ -334,4 +353,4 @@ document.fonts?.ready.then(() => director.relayout());
 window.addEventListener('load', () => ScrollTrigger.refresh());
 
 // Handy for scrubbing by hand while tuning: __page.director.byId('flow').api.seek(0.4)
-window.__page = { director, lenis, gsap, ScrollTrigger, config, authored, page: pageEntry, modal, steps };
+window.__page = { director, lenis, gsap, ScrollTrigger, config, authored, page: pageEntry, modal, steps, media: modalMedia };

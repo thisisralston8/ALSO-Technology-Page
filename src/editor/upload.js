@@ -19,7 +19,7 @@ const extOf = (name) => (name.match(/\.([^.]+)$/)?.[1] || '').toLowerCase();
 
 // A JPEG of the frame a tenth of a second in (the very first frame is often
 // black), at most 1600px wide.
-function posterFrom(file) {
+export function posterFrom(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const v = document.createElement('video');
@@ -85,6 +85,66 @@ export function videoUploader({ getConfig, onChange, saveState, persist }) {
     }
     onStatus('Saved. Reloading…');
     setTimeout(() => location.reload(), 300);   // in case Vite didn't already
+    return { stem, saved: true };
+  };
+}
+
+/* "Upload image or video…" on a slot in the Explore modal (Isometric
+   platform → Modal content). Same steps as the hero's video: a video is
+   checked by grabbing its poster; on the dev server the file is saved to
+   src/assets/modal/ (vite.config.js → uploadMedia) and the page reloads with
+   it; in a static build it shows from the file for this visit only.
+
+   `library` is the modal's media list (main.js); a file played from memory
+   is added to it. `select(stem)` puts the new file in the slot — called
+   before the upload, so the reload comes back showing it. */
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
+const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'm4v'];
+
+async function sendMedia(stem, part, body, ext = '') {
+  const res = await fetch(`/__upload-media?stem=${encodeURIComponent(stem)}&part=${part}&ext=${encodeURIComponent(ext)}`, {
+    method: 'POST', body,
+  });
+  const out = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!out.ok) throw new Error(out.error || 'upload failed');
+}
+
+export function mediaUploader({ library, persist }) {
+  return async (file, onStatus = () => {}, select = () => {}) => {
+    const ext = extOf(file.name);
+    const kind = VIDEO_EXTS.includes(ext) || file.type.startsWith('video/') ? 'video'
+      : IMAGE_EXTS.includes(ext) || file.type.startsWith('image/') ? 'image' : null;
+    if (!kind) throw new Error('Use an image (JPG, PNG, WebP, GIF, AVIF) or a video (MP4, MOV, WebM).');
+
+    const taken = new Set(library.map((m) => m.stem));
+    const base = slug(file.name).replace(/^video$/, kind);
+    let stem = base;
+    for (let k = 2; taken.has(stem); k++) stem = `${base}-${k}`;
+
+    let poster = null;
+    if (kind === 'video') {
+      onStatus('Checking the video…');
+      poster = await posterFrom(file);
+    }
+
+    if (!persist) {
+      const src = URL.createObjectURL(file);
+      library.push({ stem, kind, src, thumb: poster?.url || src, poster: poster?.url || '' });
+      select(stem);
+      return { stem, saved: false };
+    }
+
+    onStatus('Uploading…');
+    const undo = select(stem);
+    try {
+      if (poster) await sendMedia(stem, 'poster', poster.blob);
+      await sendMedia(stem, 'file', file, ext);
+    } catch (e) {
+      undo?.();
+      throw e;
+    }
+    onStatus('Saved. Reloading…');
+    setTimeout(() => location.reload(), 300);
     return { stem, saved: true };
   };
 }

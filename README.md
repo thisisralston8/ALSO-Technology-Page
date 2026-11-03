@@ -72,7 +72,17 @@ The platform's **Explore** buttons open a modal (`src/modal.js`), after pda.arch
   - Its size, icon size, distance from the bottom and colours are settings (Explore modal → Close button).
   - Its icon can be an uploaded SVG. The SVG is cleaned of scripts and links (`src/svgIcon.js`) and recoloured to the icon colour, and the markup is kept in the settings.
 - **Settings:** Isometric platform → **Explore modal** holds the timing, ease, dim, blur, card columns, margins and colours, each with its own phone values.
-- **Content:** a wireframe for now.
+- **Content** follows the Figma frames (Brand Campaign → Hardware / Software / Autonomy, desktop and mobile). The words and the order of the blocks are in `src/modalContent.js`; the desktop frames are the source of truth for the copy.
+  - **Desktop:** the frames were drawn 1127 px wide. Sizes are in those pixels scaled to the card's real width (container units, `--u` in `style.css`), so a narrower card keeps the proportions. Type stops shrinking at the phone sizes. With the default card (column 2, spanning 10) at 1440 the card is the frames' width.
+  - **Below 1024 px** everything stacks as in the phone frames.
+  - **Card → Padding inside** (default 0, as in the frames) and **Image corners** are settings. The headline is **Headline size** (Figma: 96 desktop, 44 phone).
+- **Images and videos:** every image in the frames is a *slot*, set in Isometric platform → **Modal content**, a group per layer.
+  - Each slot takes an image or a video: pick one from the thumbnails, upload one (**Upload image or video…**), or **None** for the white placeholder, which is labelled with its slot.
+  - **Shape** is the slot's aspect ratio. **File** uses the image or video's own. The media fills the shape, and **Crop focus** across / down sets what stays in view.
+  - Desktop and phone are separate. With **Mobile** selected at the top of the panel, a slot's file, shape and crop are the phone's own. The phone starts from the shapes in the phone frames, and from the desktop file until you pick one.
+  - Videos are muted and loop. They play only while on screen, and stop when the modal closes.
+  - Uploads are saved in `src/assets/modal/` (a video's poster in `modal/posters/`) and the page reloads with them. Settings refer to a file by its name. Each gets a lighter copy automatically: images at most 2400 px (never enlarged), videos as desktop and phone MP4s in `src/assets/optimized/modal/`.
+  - Edits show live while the modal is open.
 
 The beat only fires a `plat:explore` event; `main.js` opens the modal with the platform's current settings.
 

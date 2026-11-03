@@ -401,3 +401,10 @@ html.is-previewing #page { visibility: hidden; }
 }
 .svgpick__prev svg { width: 16px; height: 16px; }
 .svgpick .upload { flex: 1; margin: 0; }
+
+/* A wrapping segmented control (many short options: the modal's shapes). */
+.seg--wrap { flex-wrap: wrap; }
+.seg--wrap button { flex: 1 0 22%; border-top: 1px solid var(--line); margin-top: -1px; }
+/* Media thumbnails: videos are marked, and "None" is the empty placeholder. */
+.thumbs button.is-video { color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.thumbs button.is-none { color: #9a9a9a; font: inherit; font-size: 10px; }

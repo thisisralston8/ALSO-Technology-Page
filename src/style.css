@@ -374,7 +374,7 @@ html.is-wireframe .traf__car.is-photo {
 
 /* ---------- explore modal (modal.js) ----------
    Above the nav, the grain and the grid overlay; below the editor (100).
-   Wireframe for now: grey blocks stand in for the content. */
+   Its content follows the Figma frames; see the content rules further down. */
 
 .xm { position: fixed; inset: 0; z-index: 97; }
 /* The text block the card grew out of, while the card is open. */
@@ -393,7 +393,6 @@ html.is-wireframe .traf__car.is-photo {
   margin: 0;
   transform-origin: 0 0;
   white-space: nowrap;
-  font-weight: 400; letter-spacing: -0.03em; line-height: 1;
 }
 /* Its own stacking context, so the cards' z-indexes (each slides over the
    last) stay inside it and can't rise above the close button. */
@@ -413,19 +412,24 @@ html.is-wireframe .traf__car.is-photo {
   flex: none;
   will-change: transform, opacity;
   color: var(--xm-ink, #0b0b0b);
-  padding: 24px 24px 40px;
   overflow: clip;
+  /* The content scales with the card (see .xm__body). */
+  container-type: inline-size;
 }
+/* "01 ······ Hardware": the number on the left, the headline on the right,
+   on one baseline. */
 .xm__head {
-  display: grid;
-  grid-template-columns: minmax(48px, 1fr) 4fr;
-  align-items: center;
+  display: flex; align-items: baseline; justify-content: space-between;
   gap: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
-.xm__num, .xm__title { font-weight: 400; letter-spacing: -0.03em; line-height: 1; }
-.xm__num { font-size: 28px; }
-.xm__title { margin: 0; }
+.xm__num {
+  flex: 1;
+  font: 900 24px/28px 'Serial C', var(--display);
+  text-transform: uppercase;
+}
+.xm__title, .xm__ghost { font-weight: 400; line-height: 0.92; letter-spacing: -0.052em; }
+.xm__title { margin: 0; text-align: right; white-space: nowrap; }
 .xm__x {
   position: absolute;
   left: 50%;
@@ -438,20 +442,90 @@ html.is-wireframe .traf__car.is-photo {
 }
 .xm__x svg { display: block; width: var(--xm-icon); height: var(--xm-icon); }
 .xm__x:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-.xm__bar { display: block; height: 12px; margin: 0 0 10px; border-radius: 3px; background: #d9d9d9; }
-.xm__lede { margin-bottom: 32px; }
-.xm__lede .xm__bar { height: 20px; }
-.xm__sec { display: grid; gap: 20px; margin-bottom: 48px; }
-.xm__img {
-  aspect-ratio: 16 / 9;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 6px;
-  background: #d9d9d9;
-  color: #8a8a8a;
-  font: 500 11px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase;
+/* The content, after the Figma frames (Brand Campaign → Hardware / Software
+   / Autonomy). Desktop was drawn 1127 px wide; --u is one of those pixels at
+   the card's real width, so the layout keeps its proportions in a narrower
+   or wider card. Type stops shrinking at the phone sizes. */
+.xm__body {
+  --u: calc(100cqw / 1127);
+  display: flex; flex-direction: column;
+  gap: clamp(64px, calc(128 * var(--u)), 128px);
 }
-@media (max-width: 767px) {
-  .xm__card { padding: 16px 16px 32px; }
-  .xm__head { grid-template-columns: auto 1fr; gap: 12px; margin-bottom: 24px; }
+.xm__body h3, .xm__body p { margin: 0; font-weight: 400; }
+.xm__lede {
+  padding-inline: calc(96 * var(--u));
+  font-size: clamp(24px, calc(44 * var(--u)), 44px);
+  line-height: 1.09; letter-spacing: -0.045em;
+  text-align: center;
+  text-wrap: pretty;
+}
+.xm__copy { display: flex; flex-direction: column; gap: 24px; }
+.xm__copy h3 { font-size: clamp(26px, calc(44 * var(--u)), 44px); line-height: 1.09; letter-spacing: -0.045em; }
+.xm__copy p, .xm__body .xm__copy p { font-size: 16px; line-height: 24px; letter-spacing: -0.25px; }
+
+/* Media beside text, a row at a time. */
+.xm__rows { display: flex; flex-direction: column; gap: clamp(64px, calc(128 * var(--u)), 128px); }
+.xm__row { display: flex; align-items: center; gap: calc(40 * var(--u)); }
+.xm__rows--alt .xm__row { padding-inline: calc(40 * var(--u)); }
+.xm__rows--alt .xm__row.is-flip { flex-direction: row-reverse; }
+.xm__rows--alt .xm__media { flex: 1 1 0; min-width: 0; }
+.xm__rows--alt .xm__copy { flex: none; width: max(240px, calc(320 * var(--u))); }
+.xm__rows--left .xm__media { flex: none; width: calc(480 * var(--u)); }
+.xm__rows--left .xm__copy { flex: 0 1 calc(493 * var(--u)); }
+
+/* Media over text, `--cols` across. */
+.xm__grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 24px; align-items: start; }
+.xm__item { display: flex; flex-direction: column; gap: 24px; }
+.xm__item .xm__copy { gap: 16px; }
+.xm__item .xm__copy h3 { font-size: clamp(22px, calc(32 * var(--u)), 32px); line-height: 1.125; letter-spacing: -0.047em; }
+
+.xm__statement {
+  display: flex; flex-direction: column; gap: 24px;
+  padding-inline: calc(96 * var(--u));
+}
+.xm__statement h3 {
+  font-size: clamp(40px, calc(72 * var(--u)), 72px); line-height: 0.944; letter-spacing: -0.055em;
+  text-align: center;
+}
+.xm__statement p { font-size: clamp(22px, calc(32 * var(--u)), 32px); line-height: 1.125; letter-spacing: -0.047em; }
+
+/* An image slot. Empty, it's a white card as in the frames, labelled so it
+   can be found in the panel (Isometric platform → Modal content). */
+.xm__media {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--xm-media-r, 16px);
+  background: #111;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.xm__media.is-empty { display: flex; align-items: center; justify-content: center; background: #fff; }
+.xm__media img, .xm__media video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.xm__media.is-auto img, .xm__media.is-auto video { height: auto; }
+.xm__slot {
+  padding: 0 12px; text-align: center;
+  color: #b4b4b4;
+  font: 500 11px/1.3 var(--display); letter-spacing: 0.12em; text-transform: uppercase;
+}
+
+/* Phones and tablets (the page's Mobile settings): one column, as in the
+   phone frames. */
+@media (max-width: 1023px) {
+  .xm__head { margin-bottom: 20px; }
   .xm__num { font-size: 20px; }
+  .xm__title { line-height: 1.09; letter-spacing: -0.045em; }
+  .xm__ghost { line-height: 1.09; letter-spacing: -0.045em; }
+  .xm__body { gap: 80px; }
+  .xm__lede { padding: 0; font-size: 24px; line-height: 28px; letter-spacing: -1px; }
+  .xm__rows { gap: 40px; }
+  .xm__row, .xm__rows--alt .xm__row, .xm__rows--alt .xm__row.is-flip { flex-direction: column; align-items: stretch; gap: 24px; padding: 0; }
+  .xm__rows--alt .xm__media, .xm__rows--left .xm__media { flex: none; width: 100%; }
+  .xm__rows--alt .xm__copy, .xm__rows--left .xm__copy { flex: none; width: auto; }
+  .xm__copy, .xm__item .xm__copy { gap: 8px; }
+  .xm__copy h3, .xm__item .xm__copy h3 { font-size: 24px; line-height: 28px; letter-spacing: -1px; }
+  .xm__grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .xm__statement { padding: 0; text-align: center; }
+  .xm__statement h3 { font-size: 44px; line-height: 48px; letter-spacing: -2px; }
+  .xm__statement p { font-size: 24px; line-height: 28px; letter-spacing: -1px; }
 }
+

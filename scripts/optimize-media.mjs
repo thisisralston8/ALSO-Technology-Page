@@ -4,6 +4,8 @@
      src/assets/video/<stem>.<ext>   →  src/assets/optimized/video/<stem>.desktop.mp4  (1920 wide, ~3.5 Mbps)
                                         src/assets/optimized/video/<stem>.mobile.mp4   (720 wide, ~1.4 Mbps)
      src/assets/traffic/<name>       →  src/assets/optimized/traffic/<stem>.jpg        (360 px long edge)
+     src/assets/modal/<image>        →  src/assets/optimized/modal/<stem>.jpg          (2400 px long edge)
+     src/assets/modal/<video>        →  src/assets/optimized/modal/<stem>.{desktop,mobile}.mp4
 
    Uses only what ships with macOS: AVFoundation (a small Swift transcoder,
    compiled once into node_modules/.cache) and `sips`. Up-to-date copies are
@@ -28,6 +30,8 @@ const VIDEO_VARIANTS = [
   { name: 'mobile', width: 720, bps: 1_400_000 },
 ];
 const THUMB = 360;
+// The Explore modal's media is shown large: a lighter copy, not a thumbnail.
+const MODAL_IMAGE = 2400;
 
 const stemOf = (f) => path.basename(f).replace(/\.[^.]+$/, '');
 const mtime = (f) => stat(f).then((s) => s.mtimeMs, () => 0);
@@ -48,9 +52,9 @@ async function transcoder() {
   return built;
 }
 
-export async function optimizeVideo(file, log = console.log) {
+export async function optimizeVideo(file, log = console.log, folder = 'video') {
   if (!VIDEO_EXT.includes(path.extname(file).toLowerCase())) return;
-  const outDir = A('optimized/video');
+  const outDir = A('optimized', folder);
   await mkdir(outDir, { recursive: true });
   const srcTime = await sourceTime(file);
   for (const v of VIDEO_VARIANTS) {
@@ -65,19 +69,35 @@ export async function optimizeVideo(file, log = console.log) {
 }
 
 export async function optimizeImage(file, folder, log = console.log) {
+  const size = folder === 'modal' ? MODAL_IMAGE : THUMB;
+  const quality = folder === 'modal' ? '82' : '75';
   if (!IMAGE_EXT.includes(path.extname(file).toLowerCase())) return;
   const outDir = A('optimized', folder);
   await mkdir(outDir, { recursive: true });
   const out = path.join(outDir, `${stemOf(file)}.jpg`);
   if (await mtime(out) >= await sourceTime(file)) return;
-  await run('sips', ['-Z', String(THUMB), '-s', 'format', 'jpeg', '-s', 'formatOptions', '75', file, '--out', out]);
-  log(`[media] ${path.basename(file)} → thumbnail`);
+  // Only ever smaller: sips -Z would enlarge an image already under the size.
+  const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]);
+  const long = Math.max(...[...stdout.matchAll(/pixel(?:Width|Height): (\d+)/g)].map((m) => +m[1]));
+  const resize = long > size ? ['-Z', String(size)] : [];
+  await run('sips', [...resize, '-s', 'format', 'jpeg', '-s', 'formatOptions', quality, file, '--out', out]);
+  log(`[media] ${path.basename(file)} → ${folder === 'modal' ? 'web copy' : 'thumbnail'}`);
 }
 
 export async function optimizeAll(log = console.log) {
   const list = (dir) => readdir(A(dir)).then((fs) => fs.filter((f) => !f.startsWith('.')).map((f) => A(dir, f)), () => []);
   for (const f of await list('traffic')) await optimizeImage(f, 'traffic', log);
   for (const f of await list('video')) await optimizeVideo(f, log);
+  for (const f of await list('modal')) {
+    await optimizeImage(f, 'modal', log);
+    await optimizeVideo(f, log, 'modal');
+  }
+}
+
+// One file from the modal folder, whichever kind it is.
+export async function optimizeModal(file, log = console.log) {
+  await optimizeImage(file, 'modal', log);
+  await optimizeVideo(file, log, 'modal');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

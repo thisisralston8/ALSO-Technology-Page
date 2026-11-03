@@ -26,16 +26,20 @@
    its settings are the platform's `modal*` ones (schema.js → Isometric
    platform → Explore modal).
 
-   Content is a wireframe for now: grey blocks standing in for the image and
-   copy, so the timing and motion can be set first. */
+   The content is modalContent.js, laid out after the Figma frames: the
+   desktop layout is scaled to the card's width (it was drawn 1127 px wide),
+   and below 1024 px everything stacks as in the phone frames. Each image
+   slot shows the image or video its settings name (or a white placeholder),
+   in its set shape; videos play, muted and looping, only while on screen. */
 
 import { span as gridSpan } from './grid.js';
 import { cleanSvg } from './svgIcon.js';
+import { MODAL_LAYERS, MODAL_SLOTS, mediaKey, ratioKey, focusXKey, focusYKey } from './modalContent.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
-export function createModal({ gsap, lenis, onLayer = () => {} }) {
+export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   const root = document.createElement('div');
   root.className = 'xm';
   root.hidden = true;
@@ -65,19 +69,86 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
 
   /* ---------- cards ---------- */
 
-  function wireframe(n) {
-    const bar = (w) => `<i class="xm__bar" style="width:${w}%"></i>`;
-    const section = (k) => `
-      <section class="xm__sec">
-        <div class="xm__img"><span>Image ${n}.${k}</span></div>
-        <div class="xm__copy">${bar(92)}${bar(86)}${bar(95)}${bar(60)}</div>
-      </section>`;
-    return `
-      <div class="xm__lede">${bar(70)}${bar(55)}</div>
-      ${section(1)}${section(2)}${section(3)}`;
+  const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const fig = (slot) => `<figure class="xm__media" data-slot="${slot}"></figure>`;
+  const copy = (it) => `<div class="xm__copy"><h3>${esc(it.title)}</h3><p>${esc(it.text)}</p></div>`;
+
+  // One layer's content (modalContent.js). Groups (`.xm__group`) cascade
+  // piece by piece; everything else is one piece (see `partsOf`).
+  function content(i) {
+    const L = MODAL_LAYERS[i];
+    if (!L) return '';
+    return L.blocks.map((b) => {
+      if (b.kind === 'hero') return fig(b.slot).replace('xm__media', 'xm__media xm__hero');
+      if (b.kind === 'lede') return `<p class="xm__lede">${esc(b.text)}</p>`;
+      if (b.kind === 'rows') return `<div class="xm__group xm__rows xm__rows--${b.style}">${b.items.map((it, k) =>
+        `<div class="xm__row${b.style === 'alt' && k % 2 ? ' is-flip' : ''}">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
+      if (b.kind === 'grid') return `<div class="xm__group xm__grid" style="--cols:${b.cols}">${b.items.map((it) =>
+        `<div class="xm__item">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
+      if (b.kind === 'statement') return `<div class="xm__statement"><h3>${esc(b.title)}</h3><p>${esc(b.text)}</p></div>`;
+      return '';
+    }).join('');
   }
+  // The pieces of a card's body that cascade, top to bottom.
+  const partsOf = (c) => [...c.body.querySelectorAll(':scope > :not(.xm__group), :scope > .xm__group > *')];
+
+  /* ---------- media ----------
+     Each slot shows the file its setting names (main.js lists them), or a
+     white placeholder; its shape is the slot's set ratio ('auto': the file's
+     own). Re-run on every settings change while open, so edits show live;
+     a slot's image or video is only replaced when its file changes. */
+
+  const SLOT = Object.fromEntries(MODAL_SLOTS.map((sl) => [sl.id, sl]));
+  const phone = matchMedia('(max-width: 1023px)');
+  const videos = new Set();
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (e.isIntersecting && tl && !closing) e.target.play().catch(() => {});
+    else e.target.pause();
+  }), { root: scroller, rootMargin: '10% 0px' });
+
+  function fillSlot(f) {
+    const id = f.dataset.slot, sl = SLOT[id];
+    const stem = cfg[mediaKey(id)] || '';
+    const it = stem ? media.find((m) => m.stem === stem) : null;
+    const key = it ? `${it.kind}:${it.src}` : `none:${stem}`;
+    if (f.dataset.key !== key) {
+      f.dataset.key = key;
+      f.querySelectorAll('video').forEach((v) => { io.unobserve(v); videos.delete(v); v.removeAttribute('src'); v.load(); });
+      f.replaceChildren();
+      if (it?.kind === 'video') {
+        const v = document.createElement('video');
+        Object.assign(v, { muted: true, loop: true, playsInline: true, preload: 'metadata', src: it.src });
+        v.setAttribute('muted', '');
+        v.setAttribute('playsinline', '');
+        if (it.poster) v.poster = it.poster;
+        f.appendChild(v);
+        videos.add(v);
+        io.observe(v);
+      } else if (it) {
+        const img = Object.assign(document.createElement('img'), { src: it.src, alt: '', decoding: 'async' });
+        f.appendChild(img);
+      } else {
+        const tag = document.createElement('span');
+        tag.className = 'xm__slot';
+        tag.textContent = stem ? `Missing: ${stem}` : `${sl.layer} · ${sl.label}`;
+        f.appendChild(tag);
+      }
+    }
+    const ratio = cfg[ratioKey(id)] || 'auto';
+    // 'auto' with nothing in it: the Figma shape, so the placeholder has one.
+    const shape = ratio !== 'auto' ? ratio : it ? null : sl.shape[phone.matches ? 1 : 0];
+    f.style.aspectRatio = shape ? shape.replace(':', ' / ') : '';
+    f.classList.toggle('is-auto', !shape);
+    f.classList.toggle('is-empty', !it);
+    const m = f.firstElementChild;
+    if (m && it) m.style.objectPosition = `${cfg[focusXKey(id)] ?? 50}% ${cfg[focusYKey(id)] ?? 50}%`;
+  }
+  const fillSlots = () => stack.querySelectorAll('.xm__media').forEach(fillSlot);
+  const stopVideos = () => videos.forEach((v) => v.pause());
 
   function build() {
+    videos.forEach((v) => { io.unobserve(v); v.removeAttribute('src'); v.load(); });
+    videos.clear();
     stack.replaceChildren();
     cards = layers.map((l, i) => {
       const el = document.createElement('article');
@@ -87,7 +158,7 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
           <span class="xm__num">${String(i + 1).padStart(2, '0')}</span>
           <h2 class="xm__title"></h2>
         </header>
-        <div class="xm__body">${wireframe(i + 1)}</div>`;
+        <div class="xm__body">${content(i)}</div>`;
       const q = (s) => el.querySelector(s);
       q('.xm__title').textContent = l.heading.textContent;
       el.style.zIndex = String(i + 1);   // each card slides up over the last
@@ -151,6 +222,12 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
   function layout() {
     const H = innerHeight, M = cfg.modalMargin;
     const box = gridSpan(innerWidth, cfg.modalCol, cfg.modalSpan);
+    const pad = cfg.modalPad ?? 0;
+    // Room under the last of the content for the close button, where it
+    // floats over the card (when the margin below the card is less than it).
+    const padBottom = Math.max(pad, cfg.modalCloseBottom + cfg.modalCloseSize + 16 - M);
+    root.style.setProperty('--xm-media-r', `${cfg.modalMediaRadius ?? 16}px`);
+    fillSlots();
     cards.forEach((c, i) => {
       Object.assign(c.el.style, {
         marginLeft: `${box.x}px`, width: `${box.w}px`,
@@ -159,6 +236,7 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
         minHeight: `${Math.max(0, H - 2 * M)}px`,
         marginBottom: i < cards.length - 1 ? `${M}px` : '0px',
         borderRadius: `${cfg.modalRadius}px`, background: cardBg(cfg),
+        padding: `${pad}px ${pad}px ${padBottom}px`,
         transform: '', opacity: '', visibility: '',
       });
       c.title.style.fontSize = `${cfg.modalTitleSize}px`;
@@ -274,7 +352,7 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
       const head = !leaving;
       const bodyIn = head && arrived;
       if (head === c.head && bodyIn === c.bodyIn) return;
-      const body = [...c.body.children];
+      const body = partsOf(c);
       if (!animate) {
         gsap.killTweensOf([...body, ...headOf(c)]);
         gsap.set(body, { opacity: bodyIn ? 1 : 0, y: 0 });
@@ -343,7 +421,7 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
     gsap.set(surface, { x: a.x, y: a.y, width: a.w, height: a.h, borderRadius: 0, backgroundColor: look.bg0, opacity: 1 });
     gsap.set(ghost, { x: h0.left, y: h0.top, scale: look.k0, color: look.fg0, opacity: 1 });
     gsap.set(backdrop, { opacity: 0 });
-    const parts = [card.num, ...card.body.children];
+    const parts = [card.num, ...partsOf(card)];
     gsap.set(parts, { opacity: 0, y: cfg.modalContentRise, filter: blur(cfg.modalBlurIn) });
     gsap.set(closeBtn, { opacity: 0, y: cfg.modalContentRise, xPercent: -50 });
 
@@ -425,6 +503,7 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
   }
 
   function finish() {
+    stopVideos();
     root.hidden = true;
     stack.style.visibility = '';
     stack.style.opacity = '';
@@ -459,9 +538,22 @@ export function createModal({ gsap, lenis, onLayer = () => {} }) {
     update();
   });
 
+  /* Settings edited while it's open (the panel): restyle in place, at the
+     same place in the same card. Nothing is rebuilt, so the cascades keep
+     their state. */
+  function setConfig(c) {
+    if (!tl || closing || !cards.length) return;
+    cfg = c;
+    const card = cards[active], off = scroller.scrollTop - card.top;
+    layout();
+    scroller.scrollTop = card.top + off;
+    update();
+  }
+
   return {
     open,
     close,
+    setConfig,
     get isOpen() { return !!tl; },
   };
 }
