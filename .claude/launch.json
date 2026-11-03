@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 4800
+    },
+    {
+      "name": "traffic",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/chrisralston/Desktop/ALSO Traffic Prototype"
+      ],
+      "port": 4860
+    },
+    {
+      "name": "traffic-running",
+      "url": "http://localhost:4860",
+      "port": 4860
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+@font-face {
+  font-family: 'ABC Camera';
+  src: url('./assets/fonts/ABCCameraPlainVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --nav-h: 86px;
+  --page-bg: #ffffff;
+  --page-fg: #000000;
+  --display: 'ABC Camera', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
+
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- nav ---------- */
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 40;
+  height: var(--nav-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 5.5vw;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  color: #fff;
+}
+.nav__logo { font-weight: 800; font-size: 22px; letter-spacing: -0.02em; }
+.nav__links { display: flex; gap: 4.4vw; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.nav__cta {
+  justify-self: end;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: 99px; padding: 9px 18px;
+}
+
+/* ---------- beats ----------
+   A beat's section is `--len` viewport heights tall and its stage sticks for
+   the middle of that. No ScrollTrigger pin, so no pin-spacers to fight over
+   when two beats overlap at a seam. */
+
+.beat {
+  position: relative;
+  height: calc(var(--len, 4) * 100vh);
+}
+.beat__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  --nav-h: 86px;
+}
+/* Parked: a whole viewport clear of the fold, so the browser can skip its
+   subtree entirely. `contain-intrinsic-size` keeps the box the right height so
+   parking never shifts the scroll length. */
+.beat__stage.is-parked {
+  content-visibility: hidden;
+  contain-intrinsic-size: 100vw 100vh;
+}
+
+/* ---------- beat 1: open road ---------- */
+
+.road { background: var(--road-bg, #fff); color: var(--road-fg, #000); }
+
+.road__art {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: hidden;
+  will-change: transform, width, height;
+}
+.road__art img,
+.road__art video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.road__line {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  font-size: var(--type-size, 92px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  pointer-events: none;
+}
+/* Each run is placed from the image's edge, so it needs to sit outside normal
+   flow and be free to shrink-wrap its text. `width: max-content` is what makes
+   offsetWidth the true text width rather than the container's. */
+.road__run {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* ---------- beat 2: flow ---------- */
+
+.flow { background: var(--flow-bg, #fff); color: var(--flow-fg, #000); }
+
+.flow__field { position: absolute; inset: 0; }
+.flow__tile {
+  position: absolute;
+  top: 0; left: 0;
+  transform-origin: 0 0;
+  visibility: hidden;
+  will-change: transform;
+}
+.flow__tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.flow__copies { position: absolute; inset: 0; pointer-events: none; }
+/* Paints blurbs only while one is handing over to the next. */
+.flow__veil { position: absolute; pointer-events: none; visibility: hidden; }
+
+.flow__copy {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: min(62ch, 56vw);
+  text-align: center;
+  font-size: var(--type-size, 60px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+/* ---------- beat 3: big scroll ---------- */
+
+.big { background: var(--big-bg, #fff); }
+/* Two classes deep on purpose: the effect's own TYPE_SCROLL_CSS sets
+   `.ts-frame { position: relative }` and is injected after this sheet, so a
+   single-class rule here loses and the frame collapses to zero height. */
+/* The images are drawn by the dots layer, not the effect: its slots only hold
+   the gaps in the lines. */
+.big .ts-img { position: relative; }
+.big .ts-img canvas:not(.big__slotdot) { visibility: hidden; }
+.big__slotdot { position: absolute; inset: 0; width: 100%; height: 100%; }
+.big__dots { position: absolute; inset: 0; pointer-events: none; visibility: hidden; }
+.big__dot { position: absolute; top: 0; left: 0; will-change: transform; }
+
+.big .big__frame {
+  position: absolute;
+  inset: 0;
+  --ts-bg: var(--big-bg, #fff);
+  --ts-fg: var(--big-fg, #000);
+}
+
+/* ---------- grain + warmth (see grain.js) ----------
+   Above every beat, the nav and the handoff layer; below the editor (100).
+   The grain layer is one tile larger than the screen up and to the left, so
+   it still covers everything wherever its jitter moves it. */
+
+.grain-tint,
+.grain-noise { position: fixed; pointer-events: none; }
+.grain-tint { inset: 0; z-index: 89; mix-blend-mode: multiply; }
+.grain-noise {
+  --grain-tile: 384px;
+  top: calc(-1 * var(--grain-tile));
+  left: calc(-1 * var(--grain-tile));
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  background-repeat: repeat;
+  will-change: transform;
+}
+
+/* ---------- wireframe ----------
+   Every image becomes a flat #d9d9d9 fill. Done with a filter rather than by
+   swapping sources, so nothing about layout or timing changes and every
+   animation still plays: brightness(0) takes each pixel to black, then
+   invert(0.851) lifts black to 0.851 × 255 = 217 = #d9. Transparent pixels stay
+   transparent, which is what keeps Big scroll's reveal intact — its blocks and
+   Pixel Gather squares still pop in, just grey. */
+
+html.is-wireframe :is(.road__art img, .road__art video, .flow__tile img, .seam img, .ts-img canvas, .ts-pool, .big__dot, .big__slotdot, .agg__card) {
+  filter: brightness(0) invert(0.851);
+}
+
+/* ---------- beat 4: aggregate ---------- */
+
+.beat--join { margin-top: -100vh; }
+
+.agg { background: var(--agg-bg, #fff); color: var(--agg-fg, #000); }
+/* The structure. The scene carries the perspective and the crop (a mask, set
+   inline); the world is a point at the shape's origin, so every card's
+   translate places that card's middle. */
+.agg__scene { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.agg__world { position: absolute; width: 0; height: 0; transform-style: preserve-3d; }
+.agg__card {
+  position: absolute;
+  top: 0; left: 0;
+  background: #ddd center / cover no-repeat;
+  backface-visibility: visible;
+  will-change: transform;
+}
+.agg__texts { position: absolute; left: 0; right: 0; height: 0; z-index: 1; pointer-events: none; will-change: transform; }
+.agg__text {
+  position: absolute;
+  left: 50%; top: 0;
+  transform: translateX(-50%);
+  margin: 0;
+  width: max-content;
+  text-align: center;
+  text-wrap: balance;
+  font-weight: 400;
+}
+.agg__veil { position: absolute; pointer-events: none; visibility: hidden; }
+
+/* ---------- beat 5: isometric platform ---------- */
+
+.plat { background: var(--plat-night, #000); color: var(--plat-fg, #fff); }
+.plat__day, .plat__night { position: absolute; inset: 0; }
+.plat__night { background: var(--plat-night, #000); }
+.plat__gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.plat__dot { position: absolute; }
+.plat__copy { position: absolute; inset: 0; pointer-events: none; }
+.plat__hero {
+  position: absolute;
+  left: 50%;
+  margin: 0;
+  width: max-content;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  text-wrap: balance;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.plat__layer { position: absolute; }
+.plat__layer h3 { margin: 0 0 14px; font-weight: 400; letter-spacing: -0.03em; line-height: 1; }
+.plat__layer p { margin: 0 0 22px; line-height: 1.45; opacity: 0.8; }
+.plat__btn {
+  pointer-events: auto;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--plat-fg, #fff);
+  color: var(--plat-night, #000);
+  font: 500 11px/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* ---------- motion trail (see trail.js) ---------- */
+
+.trail-ghost { pointer-events: none !important; will-change: transform, opacity, filter; }
+.trail-ghost__fill { display: block; width: 100%; height: 100%; }
+
+/* ---------- the handoff layer ---------- */
+
+.handoff {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.seam {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, width, height;
+}
+.seam.is-on { visibility: visible; }
+.seam img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.seam__to { opacity: 0; }
+
+/* ---------- reduced motion ----------
+   Everything is scrubbed rather than played, so there is nothing to pause. What
+   we can do is drop the inertia (handled in main.js) and stop the type rolling. */
+
+@media (prefers-reduced-motion: reduce) {
+  .road__word { transition: none; }
+}
