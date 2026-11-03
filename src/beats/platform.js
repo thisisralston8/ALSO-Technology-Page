@@ -1,7 +1,7 @@
 /* Beat 5 — Isometric platform.
 
-   Picks up Aggregate's last frame (one dark dot, true centre) by *joining* it
-   (`join: true`), the way Aggregate joins Big scroll. Then, on scroll:
+   Picks up Traffic's last frame (the dark dot in "Start small") by *joining* it
+   (`join: true`). Then, on scroll:
 
      wipe       black rises from the bottom of the screen; where it covers the
                 dot, the dot is white
@@ -24,7 +24,11 @@
    The camera is a handful of stops (dot, hero, three layers, dot); scroll
    moves between them with one easing per leg and holds at each. */
 
-import * as THREE from 'three';
+// three.js is loaded on demand (see loadGL) so it isn't in the page's first
+// download: nothing needs it until this section is near.
+let THREE = null;
+import { createLineReveal } from '../lineReveal.js';
+import { span as gridSpan } from '../grid.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
@@ -78,7 +82,7 @@ const MAX_PLANES = 160;
 export function createPlatform(el, config) {
   let cfg = config;
   let progress = 0;
-  let prev = null;        // Aggregate's api, once the director joins us to it
+  let prev = null;        // Traffic's api, once the director joins us to it
 
   el.classList.add('plat');
 
@@ -114,24 +118,71 @@ export function createPlatform(el, config) {
     b.append(h, p, btn);
     return { b, h, p, btn };
   });
+  // Explore opens the layer's modal (modal.js, set up by main.js): the beat
+  // only says which block was clicked, it doesn't run the modal itself.
+  // It gets every layer's block, so it can move between them and close back
+  // into whichever one it ends on.
+  const layerEls = blocks.map((x) => ({ block: x.b, heading: x.h, button: x.btn }));
+  blocks.forEach((x, i) => x.btn.addEventListener('click', () => {
+    el.dispatchEvent(new CustomEvent('plat:explore', { bubbles: true, detail: { n: i + 1, layers: layerEls } }));
+  }));
   copy.append(hero, ...blocks.map((x) => x.b));
+  // Line reveals on the headline and each layer's headline and body, scrubbed
+  // by this beat's own text timeline (see lineReveal.js).
+  const reveals = [hero, ...blocks.flatMap((x) => [x.h, x.p])].map((e) => ({ e, r: createLineReveal(e) }));
+  let textKey = '';
 
-  /* ---------- three ---------- */
+  /* ---------- three ----------
+     Set up once three.js has loaded (loadGL). Until then the day / night /
+     dot layers — all plain DOM — carry the section, including the white dot
+     the platform opens out of, so the join from Traffic doesn't wait on it. */
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 400);
+  let renderer = null, scene = null, camera = null, pivot = null, content = null, planeGeo = null;
+  let stacks = null, cap = null, M = null, Q = null, Vp = null, Vs = null;
+  const phone = matchMedia('(max-width: 767px)').matches;
 
-  // pivot (at the camera's focus point: scale + tilt) -> content (the stack,
-  // base at y = 0). Tilting the pivot turns the platform about what you're
-  // looking at instead of swinging it round its base.
-  const pivot = new THREE.Group();
-  const content = new THREE.Group();
-  pivot.add(content);
-  scene.add(pivot);
+  function initGL(T) {
+    THREE = T;
+    // On phones: no antialiasing and at most 1.5× pixels — the planes are soft
+    // anyway, and this is most of the GPU cost.
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: !phone, alpha: false, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(phone ? 1.5 : 2, window.devicePixelRatio || 1));
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(22, 1, 0.1, 400);
 
-  const planeGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);   // lying flat, facing up
+    // pivot (at the camera's focus point: scale + tilt) -> content (the stack,
+    // base at y = 0). Tilting the pivot turns the platform about what you're
+    // looking at instead of swinging it round its base.
+    pivot = new THREE.Group();
+    content = new THREE.Group();
+    pivot.add(content);
+    scene.add(pivot);
+
+    planeGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);   // lying flat, facing up
+
+    // Painted bottom to top (the camera is always above): base, middle, top, cap.
+    stacks = {};
+    [3, 2, 1].forEach((n, i) => { stacks[n] = makeStack(MAX_PLANES); stacks[n].mesh.renderOrder = i; });
+    // The cap: a plain face on top of the top layer. It is the white dot.
+    cap = makeStack(1);
+    cap.mesh.renderOrder = 10;
+
+    M = new THREE.Matrix4();
+    Q = new THREE.Quaternion();
+    Vp = new THREE.Vector3();
+    Vs = new THREE.Vector3();
+    if (geo.W && geo.H) renderer.setSize(geo.W, geo.H, false);
+  }
+
+  let loading = null;
+  function loadGL() {
+    if (!loading) loading = import('three').then((T) => { initGL(T); render(progress); });
+    return loading;
+  }
+  // Start the download once the page has settled, so it's ready long before
+  // anyone scrolls this far — without competing with the first screen.
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+  if (document.readyState === 'complete') idle(loadGL); else addEventListener('load', () => idle(loadGL), { once: true });
 
   function makeStack(max) {
     const mat = new THREE.ShaderMaterial({
@@ -150,18 +201,6 @@ export function createPlatform(el, config) {
     return { mesh, mat, color };
   }
 
-  // Painted bottom to top (the camera is always above): base, middle, top, cap.
-  const stacks = {};
-  [3, 2, 1].forEach((n, i) => { stacks[n] = makeStack(MAX_PLANES); stacks[n].mesh.renderOrder = i; });
-  // The cap: a plain face on top of the top layer. It is the white dot.
-  const cap = makeStack(1);
-  cap.mesh.renderOrder = 10;
-
-  const M = new THREE.Matrix4();
-  const Q = new THREE.Quaternion();
-  const Vp = new THREE.Vector3();
-  const Vs = new THREE.Vector3();
-
   /* ---------- geometry ---------- */
 
   const geo = { W: 0, H: 0, layers: {}, total: 1, dot: null };
@@ -170,7 +209,7 @@ export function createPlatform(el, config) {
   function computeGeometry() {
     geo.W = el.clientWidth;
     geo.H = el.clientHeight;
-    if (geo.W && geo.H) renderer.setSize(geo.W, geo.H, false);
+    if (renderer && geo.W && geo.H) renderer.setSize(geo.W, geo.H, false);
     // Base upwards.
     let y = 0;
     [3, 2, 1].forEach((n) => {
@@ -183,13 +222,16 @@ export function createPlatform(el, config) {
     layoutText();
   }
 
-  // Where Aggregate left its dot. Falls back to a centred dot.
+  // Where Traffic left its dot. Falls back to a centred dot.
   function syncDot() {
     const d = prev?.exitDot?.();
     const s = d ? d.rect.w : cfg.dotSize;
     geo.dot = d ? { ...d.rect } : { x: geo.W / 2 - s / 2, y: geo.H / 2 - s / 2, w: s, h: s };
     geo.dayBg = d?.bg || cfg.dayBg;
     geo.dayDot = d?.colour || cfg.dayDot;
+    // Anything the previous beat still has on screen (Traffic's "Start
+    // small"), drawn on the day layer so the dark rises over it.
+    if (geo.decor !== (d?.decor || null)) { geo.decor?.remove(); geo.decor = d?.decor || null; if (geo.decor) day.prepend(geo.decor); }
   }
 
   /* ---------- text ---------- */
@@ -198,17 +240,32 @@ export function createPlatform(el, config) {
     el.style.setProperty('--plat-night', cfg.night);
     el.style.setProperty('--plat-fg', cfg.fg);
     day.style.background = geo.dayBg;
-    hero.textContent = cfg.heroText;
+    // This runs often while the dot opens, so only re-split when the text
+    // or its type actually changed. (Setting text on a split element would be
+    // undone by its revert, so un-split first.)
+    // Across, the text sits on the layout grid (grid.js).
+    const heroBox = gridSpan(geo.W, cfg.heroCol, cfg.heroSpan);
+    const textBox = gridSpan(geo.W, cfg.textCol, cfg.textSpan);
+    const key = JSON.stringify([cfg.heroText, cfg.heroSize, Math.round(heroBox.w), Math.round(textBox.w), cfg.titleSize, cfg.bodySize,
+      ...[1, 2, 3].flatMap((n) => [L(n, 'Title'), L(n, 'Body')])]);
+    const resplit = key !== textKey;
+    if (resplit) reveals.forEach(({ r }) => r.unsplit());
+    if (resplit) hero.textContent = cfg.heroText;
     Object.assign(hero.style, {
-      fontSize: `${cfg.heroSize}px`, maxWidth: `${cfg.heroWidth * 100}%`, top: `${cfg.heroTextY * 100}%`,
+      fontSize: `${cfg.heroSize}px`, top: `${cfg.heroTextY * 100}%`,
+      left: `${heroBox.x}px`, width: `${heroBox.w}px`, textAlign: cfg.heroAlign,
     });
     blocks.forEach((x, i) => {
       const n = i + 1;
-      x.h.textContent = L(n, 'Title');
-      x.p.textContent = L(n, 'Body');
+      if (resplit) {
+        x.h.textContent = L(n, 'Title');
+        x.p.textContent = L(n, 'Body');
+      }
       x.btn.textContent = L(n, 'Button');
       x.btn.style.display = L(n, 'Button') ? '' : 'none';
-      Object.assign(x.b.style, { left: `${cfg.textX * 100}%`, top: `${cfg.textY * 100}%`, maxWidth: `${cfg.textWidth}px` });
+      Object.assign(x.b.style, {
+        left: `${textBox.x}px`, width: `${textBox.w}px`, top: `${cfg.textY * 100}%`, textAlign: cfg.textAlign,
+      });
       x.h.style.fontSize = `${cfg.titleSize}px`;
       x.p.style.fontSize = `${cfg.bodySize}px`;
     });
@@ -217,6 +274,7 @@ export function createPlatform(el, config) {
     }));
     dayDot.style.background = geo.dayDot;
     nightDot.style.background = cfg.dotColour;
+    if (resplit) { textKey = key; reveals.forEach(({ r }) => r.split()); }
   }
 
   /* ---------- the timeline ----------
@@ -227,7 +285,10 @@ export function createPlatform(el, config) {
   const STOPS = ['dot', 'hero', 1, 2, 3, 'dot'];
 
   function timeline() {
-    const w = clamp01(cfg.wipeEnd);
+    // If the previous beat already brought the dark in (Traffic scrolls it up
+    // as part of its page), there's nothing to wipe: start straight on the dot.
+    const dark = String(geo.dayBg || '').toLowerCase() === String(cfg.night).toLowerCase();
+    const w = dark ? 0 : clamp01(cfg.wipeEnd);
     const leg = (1 - w) / (STOPS.length - 1);
     const hw = (clamp01(cfg.hold) * leg) / 2;
     return STOPS.map((s, i) => {
@@ -240,8 +301,10 @@ export function createPlatform(el, config) {
   // px per world unit at the focus point, before scaling.
   const pxPerUnit = () => geo.H / (2 * cfg.distance * Math.tan((cfg.fov * DEG) / 2));
 
-  // Scale at which the whole platform stands about half the screen tall.
-  const fitScale = () => (0.5 * geo.H) / (geo.total * pxPerUnit());
+  // Scale at which the whole platform stands about half the screen tall —
+  // or, on a screen taller than it is wide (a phone), about half its width,
+  // so it isn't sized by a height it can't fit across.
+  const fitScale = () => Math.min(0.5 * geo.H, 0.55 * geo.W) / (geo.total * pxPerUnit());
 
   function pose(stop) {
     if (stop === 'dot') {
@@ -313,8 +376,9 @@ export function createPlatform(el, config) {
     // Wipe.
     night.style.clipPath = st.wipe >= 1 ? '' : `inset(${((1 - st.wipe) * 100).toFixed(3)}% 0 0 0)`;
     day.style.visibility = st.wipe >= 1 ? 'hidden' : '';
-    nightDot.style.visibility = st.gl ? 'hidden' : '';
-    canvas.style.visibility = st.gl ? '' : 'hidden';
+    const gl = st.gl && !!renderer;
+    nightDot.style.visibility = gl ? 'hidden' : '';
+    canvas.style.visibility = gl ? '' : 'hidden';
 
     // Text.
     const show = (e, o, rise) => {
@@ -324,8 +388,15 @@ export function createPlatform(el, config) {
     };
     show(hero, st.text.hero, true);
     blocks.forEach((x, i) => show(x.b, st.text[i + 1], true));
+    // Lines rise in as each text comes in, and sink back as it goes.
+    reveals[0].r.set(st.text.hero);
+    blocks.forEach((x, i) => { reveals[1 + i * 2].r.set(st.text[i + 1]); reveals[2 + i * 2].r.set(st.text[i + 1]); });
 
-    if (st.gl) draw(st);
+    // The platform itself, once three.js is here (it's fetched on idle; this
+    // only waits if someone gets here first). Until then the DOM dot stays.
+    if (st.gl && !renderer) loadGL();
+    if (st.gl && renderer) draw(st);
+    drawnAt = progress;
   }
 
   function draw(st) {
@@ -418,7 +489,7 @@ export function createPlatform(el, config) {
   /* ---------- the ambient clock ---------- */
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  let raf = 0, last = 0, onScreen = false;
+  let raf = 0, last = 0, onScreen = false, drawnAt = -1;
 
   function frame(now) {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
@@ -429,7 +500,11 @@ export function createPlatform(el, config) {
     tilt.vx += (mouse.x - tilt.x) * k * dt; tilt.vx -= tilt.vx * c * dt;
     tilt.vy += (mouse.y - tilt.y) * k * dt; tilt.vy -= tilt.vy * c * dt;
     tilt.x += tilt.vx * dt; tilt.y += tilt.vy * dt;
-    render(progress);
+    // Draw only when something has changed: the scroll, the ambient drift or
+    // float, or the lean still settling towards the cursor.
+    const ambient = !reduced.matches && (cfg.flow > 0 || cfg.float > 0);
+    const leaning = cfg.tilt > 0 && (Math.abs(tilt.vx) + Math.abs(tilt.vy) > 1e-4 || Math.abs(mouse.x - tilt.x) + Math.abs(mouse.y - tilt.y) > 1e-3);
+    if (ambient || leaning || drawnAt !== progress) render(progress);
     raf = onScreen ? requestAnimationFrame(frame) : 0;
   }
 
@@ -455,6 +530,9 @@ export function createPlatform(el, config) {
     setConfig,
     relayout() { computeGeometry(); render(progress); },
     join(api) { prev = api; computeGeometry(); render(progress); },
+    // This beat's progress at the middle of layer n's stop (1–3): where the
+    // explore modal moves the page to as you read through the layers.
+    stopAt(n) { return timeline().find((t) => t.s === n)?.T ?? null; },
     // For a beat that joins this one: the white dot it ends on.
     exitDot() { return geo.dot ? { rect: { ...geo.dot }, colour: cfg.dotColour, bg: cfg.night } : null; },
     tick(now) { frame(now); },
@@ -462,7 +540,8 @@ export function createPlatform(el, config) {
       io.disconnect();
       removeEventListener('pointermove', onMove);
       if (raf) cancelAnimationFrame(raf);
-      renderer.dispose();
+      renderer?.dispose();
+      reveals.forEach(({ r }) => r.destroy());
       el.classList.remove('plat');
       day.remove(); night.remove();
     },
@@ -472,6 +551,13 @@ export function createPlatform(el, config) {
 
 export const PLATFORM_DEFAULTS = {
   length: 10,              // section height in viewport heights
+
+  // The three layers are steps, not a free scroll (steps.js): one gesture
+  // moves one layer.
+  steps: 'on',             // 'on' | 'off'
+  stepDuration: 1.2,       // s for the move from one layer to the next
+  stepEase: 'power2.inOut',
+  stepQuiet: 0.15,         // s of no wheel events before the next gesture counts
 
   // Timing, as shares of this beat's scroll
   wipeEnd: 0.06,           // black has covered the screen
@@ -483,13 +569,58 @@ export const PLATFORM_DEFAULTS = {
   // Hero
   heroText: 'The in-house platform built for a ride that’s out-of-this-world.',
   heroSize: 44,
-  heroWidth: 0.42,         // × screen width
+  heroCol: 4,              // on the layout grid: first column (1-based)…
+  heroSpan: 6,             // …and how many it spans before wrapping
+  heroAlign: 'center',
   heroTextY: 0.5,          // × screen height (centre of the text)
 
+  // Explore modal (modal.js): the layer's text block grows into a card in
+  // the centre of the screen over the dimmed, blurred section.
+  modalDuration: 0.7,      // s, the block growing into the card
+  modalEase: 'power4.out',
+  modalContentDelay: 0.05, // s after the card lands that its content starts
+  modalContentFade: 0.5,   // s each piece of content takes to rise in
+  modalContentRise: 16,    // px it rises
+  modalStagger: 0.06,      // s between pieces
+  modalCloseSpeed: 1.4,    // closing plays the opening backwards, this much faster
+  // Reading on from one layer to the next, in the modal (as GSAP's pinned
+  // panels with overscroll): the card you've finished holds and shrinks
+  // while the next slides up over it.
+  modalStackScale: 0.7,    // what the finished card shrinks to
+  modalStackFade: 0.5,     // its opacity just before it goes
+  modalFollow: 1.2,        // s the section behind takes to move to the next layer
+  // …and the content cascades between them (played on time once crossed).
+  modalSwapOut: 0.1,       // share of a handover at which the old content cascades away
+  modalSwapIn: 0.6,        // share at which the new body cascades in under its headline
+  modalSwapFade: 0.35,     // s each piece takes to go (coming in uses Content rises over)
+  modalSwapStagger: 0.05,  // s between pieces
+  modalBlurOut: 6,         // px content blurs to as it fades away
+  modalBlurIn: 6,          // px content arrives from as it fades in (also on open)
+
+  // The close button, floating at the bottom centre of the screen.
+  modalCloseSize: 56,      // px across
+  modalCloseIconSize: 0.4, // × the button
+  modalCloseBottom: 32,    // px up from the bottom of the screen
+  modalCloseBg: '#ffffff',
+  modalCloseInk: '#0b0b0b',
+  modalCloseIcon: '',      // uploaded SVG markup; empty for a plain ×
+  modalDim: 0.6,           // backdrop darkness, 0–1
+  modalBlur: 12,           // px
+  modalCol: 3,             // the card on the layout grid: first column…
+  modalSpan: 8,            // …and how many it spans
+  modalMargin: 96,         // px above and below the card
+  modalRadius: 16,         // px
+  modalOriginPad: 12,      // px the starting surface reaches round the text block
+  modalTitleSize: 44,      // px
+  modalBg: '#ecebe8',
+  modalBgOpacity: 1,       // 0–1: below 1 the dimmed, blurred section shows through
+  modalInk: '#0b0b0b',
+
   // Layer text
-  textX: 0.07,             // left edge, × screen width
+  textCol: 2,              // on the layout grid: first column (1-based)…
+  textSpan: 4,             // …and how many it spans before wrapping
+  textAlign: 'left',
   textY: 0.44,             // top, × screen height
-  textWidth: 380,          // px
   titleSize: 34,
   bodySize: 14,
   layer1Title: 'Hardware',
@@ -533,7 +664,27 @@ export const PLATFORM_DEFAULTS = {
   night: '#000000',
   fg: '#ffffff',
   dotColour: '#ffffff',
-  dotSize: 24,             // px, if there's no Aggregate to take it from
+  dotSize: 24,             // px, if there's no previous beat to take it from
   dayBg: '#ffffff',
   dayDot: '#0d0d0d',
+};
+
+/* Mobile starting values (phones and tablets, below 1024 px wide), applied
+   over the desktop ones. Edit them in the inspector's Mobile mode. Portrait:
+   each layer's text sits at the top of the screen, across the whole 4-column
+   grid, and the platform centred below it. */
+export const PLATFORM_MOBILE = {
+  modalCol: 1, modalSpan: 4, modalMargin: 24, modalTitleSize: 30, modalCloseSize: 48, modalCloseBottom: 20,
+  heroSize: 28,
+  heroCol: 1, heroSpan: 4,
+  textCol: 1, textSpan: 4,
+  textY: 0.11,
+  titleSize: 30,
+  bodySize: 14,
+  heroZoom: 1,
+  view1X: 0, view1Y: 0.02, view1Zoom: 1.6,
+  view2X: 0, view2Y: 0.16, view2Zoom: 1.8,
+  view3X: 0, view3Y: 0.16, view3Zoom: 1.7,
+  tilt: 0,
+  float: 0,
 };

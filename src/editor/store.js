@@ -2,7 +2,7 @@
    binary to keep and localStorage is enough. The whole page config round-trips
    as one JSON blob so a state can be handed to someone else. */
 
-const KEY = 'also-tech-page:config';
+const KEY = 'also-traffic-page:config';
 
 // Images and videos are injected at boot and would bloat (and stale-date) the save.
 const STRIP = ['images', 'videos'];
@@ -43,7 +43,7 @@ export function reset() {
 
 /* View mode is a review setting, not part of the page config: it isn't
    exported with "Copy config" and survives "Reset all". */
-const VIEW_KEY = 'also-tech-page:view';
+const VIEW_KEY = 'also-traffic-page:view';
 
 export function loadView() {
   try {
@@ -78,4 +78,14 @@ export async function saveDefaults(data) {
     if (prev != null) localStorage.setItem(KEY, prev);
     throw e;
   }
+}
+
+/* Another window (or the phone preview's frame) changed the settings or the
+   view: localStorage fires `storage` in every other same-origin document, so
+   an edit in one window shows in all of them. */
+export function watch({ onConfig, onView }) {
+  addEventListener('storage', (e) => {
+    if (e.key === KEY || e.key === null) onConfig?.();
+    if (e.key === VIEW_KEY || e.key === null) onView?.();
+  });
 }

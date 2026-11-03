@@ -129,6 +129,16 @@ export function createTrail() {
 
   function hide(it) { it.ghosts.forEach((g) => { g.style.display = 'none'; }); }
 
+  // Forget an element's history and hide its echoes now. For an element that
+  // has just been handed over (or taken back): echoes of where it *was* would
+  // linger as a ghost at the old place for the length of the trail.
+  function reset(el) {
+    const it = items.get(el);
+    if (!it) return;
+    it.hist = [];
+    hide(it);
+  }
+
   function update(now) {
     if (!items.size) return;
     if (!active()) { items.forEach((it) => { if (it.ghosts.length) { fit(it, 0); it.hist = []; } }); return; }
@@ -181,7 +191,7 @@ export function createTrail() {
   }
 
   const self = {
-    add, remove, clear, update, setOptions, hide,
+    add, remove, clear, update, setOptions, hide, reset,
     destroy() { clear(); trails.delete(self); },
   };
   trails.add(self);

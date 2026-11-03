@@ -12,61 +12,71 @@ import Lenis from 'lenis';
 import './style.css';
 
 import { createDirector } from './director.js';
-import { createOpenRoad, OPEN_ROAD_DEFAULTS } from './beats/open-road.js';
-import { createImageFlow, IMAGE_FLOW_DEFAULTS } from './beats/image-flow.js';
-import { createBigScroll, BIG_SCROLL_DEFAULTS, TYPE_SCROLL_CSS } from './beats/big-scroll.js';
-import { createAggregate, AGGREGATE_DEFAULTS } from './beats/aggregate.js';
-import { createPlatform, PLATFORM_DEFAULTS } from './beats/platform.js';
+import { createOpenRoad, OPEN_ROAD_DEFAULTS, OPEN_ROAD_MOBILE } from './beats/open-road.js';
+import { createTraffic, TRAFFIC_DEFAULTS, TRAFFIC_MOBILE } from './beats/traffic.js';
+import { createPlatform, PLATFORM_DEFAULTS, PLATFORM_MOBILE } from './beats/platform.js';
+import { createNav } from './nav.js';
+import { createModal } from './modal.js';
+import { createSteps } from './steps.js';
 import { createInspector } from './editor/inspector.js';
 import { createGrain, GRAIN_DEFAULTS } from './grain.js';
-import { TRAIL_DEFAULTS } from './trail.js';
-import { load as loadSaved, save as saveState, saveDefaults } from './editor/store.js';
+import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
+import { GRID_DEFAULTS, GRID_MOBILE, setGrid, showGridOverlay } from './grid.js';
+import { load as loadSaved, save as saveState, saveDefaults, loadView, watch } from './editor/store.js';
 import { videoUploader } from './editor/upload.js';
 import savedDefaults from './defaults.json';
 
 gsap.registerPlugin(ScrollTrigger, Observer);
+// A phone's address bar showing or hiding resizes the window; don't re-measure
+// every scroll range for that (the director re-lays-out on real resizes).
+ScrollTrigger.config({ ignoreMobileResize: true });
 
-// The effect ships its own CSS so an embed carries exactly what the editor renders.
-const tsStyle = document.createElement('style');
-tsStyle.textContent = TYPE_SCROLL_CSS;
-document.head.appendChild(tsStyle);
+/* ---------- media ----------
+   Originals live in src/assets/{images,hero,traffic,video}; the optimizer
+   (scripts/optimize-media.mjs, run by the dev server and before builds)
+   writes small copies to src/assets/optimized/. Each picks its copy by name
+   (`stem`) and falls back to the original if a copy isn't there yet. */
 
-/* ---------- images ---------- */
+const fileStem = (path) => path.split('/').pop().replace(/\.[^.]+$/, '');
+const byStem = (glob) => Object.fromEntries(Object.entries(glob).map(([p, src]) => [fileStem(p), src]));
+// The page's phone breakpoint (see "mobile settings" below): phones and
+// tablets — everything narrower than 1024 px — get the Mobile settings and
+// the 4-column grid.
+const PHONE = '(max-width: 1023px)';
+// Narrower still: an actual phone. Only for picking the small video copy.
+const SMALL_SCREEN = '(max-width: 767px)';
 
+// Open road's picture grid: the hero folder first, then the sample pool —
+// full size, since the hero fills the screen. (Nothing waits on these
+// loading: they're only offered as choices.)
 const urls = Object.values(
   import.meta.glob('./assets/images/*.jpg', { eager: true, query: '?url', import: 'default' }),
 ).sort();
-
-const measure = (src) =>
-  new Promise((res) => {
-    const im = new Image();
-    im.onload = () => res(im.naturalWidth / im.naturalHeight || 1);
-    im.onerror = () => res(1);
-    im.src = src;
-  });
-
-const images = await Promise.all(urls.map(async (src) => ({ src, ar: await measure(src) })));
-
-// Hero images for Open road live in their own folder, apart from the pool
-// above: Flow's tiles and Big scroll's slots are assigned by position in that
-// pool, so adding a hero there would reshuffle both.
+const images = urls.map((src) => ({ src }));
 const heroUrls = Object.values(
   import.meta.glob('./assets/hero/*.{jpg,jpeg,png,webp,gif,avif}', { eager: true, query: '?url', import: 'default' }),
 ).sort();
-const heroImages = await Promise.all(heroUrls.map(async (src) => ({ src, ar: await measure(src) })));
-// Open road can use any image: heroes first, then the pool.
-const pickable = [...heroImages, ...images];
+const pickable = [...heroUrls.map((src) => ({ src })), ...images];
 
-// Hero videos (Open road): each video in assets/video, with a same-named .jpg as
-// its poster. Referred to by name (`stem`), like images, so builds still match.
-// "Upload video…" in the Open road controls adds to this folder.
+// Traffic's images: everything in src/assets/traffic — drop images in (or
+// take them out) and the page reloads with them. Each is shown at its 360 px
+// thumbnail; the pieces are never bigger than that.
+const trafficGlob = import.meta.glob('./assets/traffic/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP}', { eager: true, query: '?url', import: 'default' });
+const trafficThumbs = byStem(import.meta.glob('./assets/optimized/traffic/*.jpg', { eager: true, query: '?url', import: 'default' }));
+const trafficImages = Object.entries(trafficGlob).sort().map(([p, src]) => ({ src: trafficThumbs[fileStem(p)] || src }));
+
+// Hero videos (Open road): each video in assets/video, with a same-named .jpg
+// as its poster, referred to by name. "Upload video…" adds to this folder.
+// Played from its optimized copy: the phone one on a phone, else the desktop
+// one, else the original.
 const videoUrls = import.meta.glob('./assets/video/*.{mp4,mov,webm,m4v}', { eager: true, query: '?url', import: 'default' });
-const posterUrls = import.meta.glob('./assets/video/*.jpg', { eager: true, query: '?url', import: 'default' });
-const fileStem = (path) => path.split('/').pop().replace(/\.[^.]+$/, '');
+const posterUrls = byStem(import.meta.glob('./assets/video/*.jpg', { eager: true, query: '?url', import: 'default' }));
+const optimizedVideo = byStem(import.meta.glob('./assets/optimized/video/*.mp4', { eager: true, query: '?url', import: 'default' }));
+const phoneAtLoad = matchMedia(SMALL_SCREEN).matches;
 const videos = Object.entries(videoUrls).sort().map(([path, src]) => {
   const stem = fileStem(path);
-  const poster = Object.entries(posterUrls).find(([p]) => fileStem(p) === stem)?.[1] || '';
-  return { stem, src, poster };
+  const best = (phoneAtLoad && optimizedVideo[`${stem}.mobile`]) || optimizedVideo[`${stem}.desktop`] || src;
+  return { stem, src: best, poster: posterUrls[stem] || '' };
 });
 
 /* ---------- scroll ---------- */
@@ -81,25 +91,37 @@ const PAGE_DEFAULTS = {
   smoothness: 0.55,   // 0 = native scrolling, 1 = a very heavy glide
   scrollSpeed: 1,     // distance per wheel tick / swipe, × the browser's
   ...GRAIN_DEFAULTS,  // grain + warmth over the whole page (grain.js)
+  ...REVEAL_DEFAULTS, // line reveal on every text (lineReveal.js)
+  ...GRID_DEFAULTS,   // the layout grid the text lines up to (grid.js)
 };
+
+// Phone starting values for the page (see "mobile settings" below): a still
+// grain — the same look, without repainting it every few frames — and the
+// 4-column grid.
+const PAGE_MOBILE = { grainSpeed: 0, ...GRID_MOBILE };
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const lerpFor = (s) => Math.pow(0.02, s); // 0 → 1 (none), 1 → 0.02 (heavy)
 
 const lenis = new Lenis({ smoothWheel: !reduced, autoRaf: false });
 
+// Returns true if the grid changed, so the beats need laying out again.
 function applyPage(page) {
+  setRevealOptions(page);
+  const gridChanged = setGrid(page);
   lenis.options.lerp = reduced ? 1 : lerpFor(page.smoothness);
   lenis.options.wheelMultiplier = page.scrollSpeed;
   lenis.options.touchMultiplier = page.scrollSpeed;
+  return gridChanged;
 }
 lenis.on('scroll', ScrollTrigger.update);
+createNav(document.getElementById('nav'), lenis);
 gsap.ticker.add((t) => lenis.raf(t * 1000));
 gsap.ticker.lagSmoothing(0);
 
 /* ---------- config ---------- */
 
-const saved = loadSaved();
+let saved = loadSaved();
 
 /* Three layers, lowest first:
      1. the built-in *_DEFAULTS in each beat's source
@@ -119,59 +141,41 @@ const resolveImage = (v) => {
   return (pickable.find((im) => stemOf(im.src) === stem) || { src: fallback }).src;
 };
 
-// Big scroll keeps its settings in nested groups (params.type, params.roll…),
-// so merge each group rather than letting a saved group replace a whole one.
-const mergeParams = (...ps) => {
-  const out = {};
-  for (const p of ps) for (const [k, v] of Object.entries(p || {})) {
-    out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...out[k], ...v } : v;
-  }
-  return out;
-};
+/* ---------- mobile settings ----------
+   Each section's settings are its desktop values plus `mobile`: overrides
+   used below the phone breakpoint. Built-in phone starting values (the
+   *_MOBILE exports) sit under any saved ones. What's authored (and edited,
+   and saved) is that whole object; what a section is given is the
+   *effective* config — the overrides applied on a phone. */
 
-const page = { ...PAGE_DEFAULTS, ...layer('page') };
-applyPage(page);
-const grain = createGrain(page);
+const phoneMQ = matchMedia(PHONE);
+const withMobile = (id, base, builtIn) => ({ ...base, mobile: { ...builtIn, ...(layer(id).mobile || {}) } });
+const effective = (c) => (phoneMQ.matches && c.mobile ? { ...c, ...c.mobile } : c);
 
-// Flow used to have a single `text`. In settings saved before blurbs existed:
-// an edited text carries over as a one-blurb list, so nobody's copy is lost;
-// an untouched one (still the built-in sentence — "Save as default" stores
-// every value, edited or not) is dropped so the new default blurbs show.
-function flowLayer() {
-  const l = layer('flow');
-  if (l.text != null && l.texts == null) {
-    const untouched = l.text.trim() === IMAGE_FLOW_DEFAULTS.texts[0].trim();
-    if (!untouched) l.texts = [l.text];
-  }
-  delete l.text;
-  return l;
+// Each section's authored settings, built from the three layers. Run again
+// when another window changes them (see `watch` below).
+function compose(id) {
+  const l = layer(id);
+  if (id === 'page') return withMobile('page', { ...PAGE_DEFAULTS, ...l }, PAGE_MOBILE);
+  if (id === 'traffic') return withMobile('traffic', { ...TRAFFIC_DEFAULTS, ...l, images: trafficImages }, TRAFFIC_MOBILE);
+  if (id === 'platform') return withMobile('platform', { ...PLATFORM_DEFAULTS, ...l }, PLATFORM_MOBILE);
+  // Open road. The hero's colour moved from Traffic to Open road: keep one saved there.
+  const t = layer('traffic');
+  return withMobile('open-road', {
+    ...OPEN_ROAD_DEFAULTS,
+    ...(t.heroColour ? { heroColour: t.heroColour } : {}),
+    ...(t.heroColourAmount != null ? { heroColourAmount: t.heroColourAmount } : {}),
+    ...l, image: resolveImage(l.image), videos,
+  }, OPEN_ROAD_MOBILE);
 }
 
-// Aggregate was redesigned (scroll-driven shapes instead of hovers). Settings
-// saved for the old design mostly name things that no longer exist, and the
-// few that survive by name (length, the exit's height) meant something else —
-// so only the colours and the motion trail carry over.
-function aggregateLayer() {
-  const l = layer('aggregate');
-  if (l.design === AGGREGATE_DEFAULTS.design) return l;
-  const keep = ['bg', 'fg', 'fillColour', ...Object.keys(TRAIL_DEFAULTS)];
-  return Object.fromEntries(Object.entries(l).filter(([k]) => keep.includes(k)));
-}
+const page = compose('page');
+applyPage(effective(page));
+const grain = createGrain(effective(page));
 
-const roadLayer = layer('open-road');
-const bigLayer = layer('big-scroll');
-const config = {
-  openRoad: { ...OPEN_ROAD_DEFAULTS, ...roadLayer, image: resolveImage(roadLayer.image), videos },
-  flow: { ...IMAGE_FLOW_DEFAULTS, ...flowLayer(), images },
-  big: {
-    ...BIG_SCROLL_DEFAULTS,
-    ...bigLayer,
-    images,
-    params: mergeParams(BIG_SCROLL_DEFAULTS.params, savedDefaults['big-scroll']?.params, saved['big-scroll']?.params),
-  },
-  aggregate: { ...AGGREGATE_DEFAULTS, ...aggregateLayer(), images },
-  platform: { ...PLATFORM_DEFAULTS, ...layer('platform') },
-};
+const config = { openRoad: compose('open-road'), traffic: compose('traffic'), platform: compose('platform') };
+// Authored settings by id — what the inspector edits and Save as default saves.
+const authored = { page, 'open-road': config.openRoad, traffic: config.traffic, platform: config.platform };
 
 /* ---------- the sequence ----------
    Every beat hands over to the next unless it says `seam: false`. The handover
@@ -185,80 +189,144 @@ const director = createDirector({
   beats: [
     {
       id: 'open-road', name: 'Open road',
-      length: config.openRoad.length,
-      create: createOpenRoad, config: config.openRoad,
+      length: effective(config.openRoad).length,
+      create: createOpenRoad, config: effective(config.openRoad),
     },
     {
-      id: 'flow', name: 'Flow',
-      // Lead: the stream starts running as Beat 1 unsticks, so the tile falling
-      // out of the headline drops into a river that is already moving.
-      length: config.flow.length, lead: true,
-      // No handoff into Beat 3: the stream fully drains off the left edge by
-      // the end of this beat, and Beat 3 pushes it away rather than receiving
-      // a tile from it.
-      seam: false,
-      create: createImageFlow, config: config.flow,
-    },
-    {
-      id: 'big-scroll', name: 'Big scroll',
-      // No lead: this section is sized so its type moves 1:1 with the page
-      // (see big-scroll.js). As it slides in under Flow the frame itself
-      // carries the type up at scroll speed; once it locks, the effect carries
-      // on at the same speed. Leading would double the speed during the slide.
-      length: 2, seam: false,
-      create: createBigScroll, config: config.big,
-    },
-    {
-      id: 'aggregate', name: 'Aggregate',
-      // Join: overlaps Big scroll's last screen and starts on the exact frame
-      // Big scroll ends on, carrying its three dots on rather than sliding in.
-      length: config.aggregate.length, join: true, seam: false,
-      create: createAggregate, config: config.aggregate,
+      id: 'traffic', name: 'Traffic',
+      // Lead: the traffic is already flowing as Open road unsticks, so the
+      // square dropping out of the headline joins something in motion. The
+      // section sizes itself so the page moves 1:1 (naturalLength). No seam
+      // out: the platform joins on its last frame instead.
+      length: 6, lead: true, seam: false,
+      create: createTraffic, config: effective(config.traffic),
     },
     {
       id: 'platform', name: 'Isometric platform',
-      // Join: starts on the frame Aggregate ends on — its single dot — and
-      // takes that dot into the dark.
-      length: config.platform.length, join: true, seam: false,
-      create: createPlatform, config: config.platform,
+      // Join: starts on the frame Traffic ends on — the dot in "Start small" —
+      // and takes that dot into the dark.
+      length: effective(config.platform).length, join: true, seam: false,
+      create: createPlatform, config: effective(config.platform),
     },
   ],
 });
 
+/* ---------- explore modal ----------
+   The platform's Explore buttons ask for it (platform.js); it reads the
+   platform's current `modal*` settings each time it opens. */
+
+const modal = createModal({
+  gsap, lenis,
+  // Reading on to another layer: the section behind moves to it, so the
+  // modal closes onto the right view. Lenis is stopped while the modal is
+  // open, so this moves the page's own scroll position (ScrollTrigger
+  // follows it as usual); Lenis picks the new position up when it restarts.
+  onLayer(n, c) {
+    const m = director.byId('platform');
+    const p = m?.api.stopAt?.(n);
+    if (p == null || !m.trigger) return;
+    const to = m.trigger.start + (m.trigger.end - m.trigger.start) * p;
+    follow?.kill();
+    const at = { y: window.scrollY };
+    follow = gsap.to(at, {
+      y: to, duration: c.modalFollow, ease: 'power2.inOut',
+      onUpdate: () => window.scrollTo(0, at.y),
+    });
+  },
+});
+let follow = null;
+document.addEventListener('plat:explore', (e) => modal.open({ ...e.detail, cfg: effective(authored.platform) }));
+
+// The platform's three layers scroll in steps (steps.js).
+const steps = createSteps({ gsap, lenis, director, getConfig: () => effective(authored.platform) });
+
 /* ---------- editor ---------- */
 
 // Page-wide settings get their own tab, ahead of the beats.
-const pageEntry = { def: { id: 'page', name: 'Page', config: page } };
+const pageEntry = { def: { id: 'page', name: 'Page', config: effective(page) } };
 
-// Everything currently on screen, in the shape defaults.json stores it.
+// Give a section its effective settings (after an edit, or when the page
+// crosses the phone breakpoint).
+function apply(id) {
+  const eff = effective(authored[id]);
+  if (id === 'page') {
+    pageEntry.def.config = eff;
+    const gridChanged = applyPage(eff);
+    grain.setConfig(eff);
+    if (gridChanged) director.relayout();
+  } else {
+    director.setConfig(id, eff);
+    // Traffic's hero lane hangs off where Open road leaves its square.
+    if (id === 'open-road') director.byId('traffic')?.api.relayout();
+  }
+}
+function onChange(id, next) {
+  authored[id] = next;
+  apply(id);
+  saveState(id, next);
+}
+phoneMQ.addEventListener('change', () => {
+  Object.keys(authored).forEach(apply);
+  director.relayout();
+});
+
+// Everything as authored, in the shape defaults.json stores it.
 function currentSettings() {
   const strip = ({ images: _images, videos: _videos, ...rest }) => rest;
-  const out = { page: strip(pageEntry.def.config) };
-  director.beats.forEach((m) => { out[m.def.id] = strip(m.def.config); });
-  // Derived, not a setting: Big scroll sizes its own section.
-  delete out['big-scroll'].length;
+  const out = {};
+  Object.entries(authored).forEach(([id, c]) => { out[id] = strip(c); });
   out['open-road'].image = stemOf(out['open-road'].image);
   return out;
 }
 
-createInspector({
+/* `?embed` is the page inside the panel's phone preview (inspector.js): no
+   panel of its own; the grid and wireframe follow the window that has one. */
+const embedded = new URLSearchParams(location.search).has('embed');
+
+const inspector = embedded ? null : createInspector({
   director,
   images: pickable,
   extras: [pageEntry],
   // Only the dev server can write the file; a static build has no endpoint.
   onSaveDefaults: import.meta.env.DEV ? () => saveDefaults(currentSettings()) : null,
-  onUploadVideo: videoUploader({ director, saveState, persist: import.meta.env.DEV }),
-  onChange: (id, next) => {
-    if (id === 'page') {
-      pageEntry.def.config = next;
-      applyPage(next);
-      grain.setConfig(next);
-    } else {
-      director.setConfig(id, next);
-    }
-    saveState(id, next);
-  },
+  onUploadVideo: videoUploader({ getConfig: () => authored['open-road'], onChange: (next) => onChange('open-road', next), saveState, persist: import.meta.env.DEV }),
+  getConfig: (id) => authored[id],
+  onChange,
+  phoneQuery: PHONE,
+  sheetQuery: SMALL_SCREEN,
 });
+
+/* Edits made in another window — the panel driving the phone preview, or a
+   second browser window — apply here as they're made. Only sections whose
+   settings actually changed are re-applied. */
+const sameSettings = (a, b) => {
+  const strip = ({ images: _i, videos: _v, ...rest }) => rest;
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+};
+function syncView() {
+  const v = loadView();
+  showGridOverlay(!!v.grid);
+  document.documentElement.classList.toggle('is-wireframe', !!v.wireframe);
+}
+watch({
+  onConfig() {
+    saved = loadSaved();
+    let changed = false;
+    Object.keys(authored).forEach((id) => {
+      const next = compose(id);
+      if (sameSettings(next, authored[id])) return;
+      authored[id] = next;
+      apply(id);
+      changed = true;
+    });
+    if (changed) inspector?.refresh();
+  },
+  onView: embedded ? syncView : null,
+});
+if (embedded) {
+  document.documentElement.classList.add('is-embed');
+  syncView();
+}
 
 /* ---------- ready ---------- */
 
@@ -266,4 +334,4 @@ document.fonts?.ready.then(() => director.relayout());
 window.addEventListener('load', () => ScrollTrigger.refresh());
 
 // Handy for scrubbing by hand while tuning: __page.director.byId('flow').api.seek(0.4)
-window.__page = { director, lenis, gsap, ScrollTrigger, config, page: pageEntry };
+window.__page = { director, lenis, gsap, ScrollTrigger, config, authored, page: pageEntry, modal, steps };

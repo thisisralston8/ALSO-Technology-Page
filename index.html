@@ -7,10 +7,25 @@
   <link rel="preload" href="/src/assets/fonts/ABCCameraPlainVariable.woff2" as="font" type="font/woff2" crossorigin />
 </head>
 <body>
+  <!-- The site header from ridealso.com (Figma: Brand Campaign › Main Nav).
+       Two looks, set by src/nav.js: clear over the top of the page; a white
+       card that drops back in when you scroll up. -->
   <header id="nav" class="nav">
-    <span class="nav__logo">ALSO.</span>
-    <nav class="nav__links"><span>Shop</span><span>Fleet</span><span>Company</span><span>Support</span></nav>
-    <span class="nav__cta">Test spin</span>
+    <div class="nav__bar">
+      <a class="nav__logo" href="https://ridealso.com" aria-label="ALSO home">
+        <img src="/src/assets/nav/logo.svg" alt="" width="104.916" height="26" />
+      </a>
+      <nav class="nav__links" aria-label="Main">
+        <a href="#">Shop</a><a href="#">Fleet</a><a href="#">Company</a><a href="#">Support</a>
+      </nav>
+      <div class="nav__end">
+        <a class="nav__cta" href="#">Test spin</a>
+        <a class="nav__icon nav__icon--search" href="#" aria-label="Search"><img src="/src/assets/nav/search.svg" alt="" width="22" height="22" /></a>
+        <a class="nav__icon nav__icon--cart" href="#" aria-label="Cart"><img src="/src/assets/nav/cart.svg" alt="" width="20.5" height="21.5" /></a>
+        <a class="nav__icon nav__icon--user" href="#" aria-label="Account"><img src="/src/assets/nav/user.svg" alt="" width="19.5004" height="21.5" /></a>
+        <a class="nav__icon nav__icon--menu" href="#" aria-label="Menu"><img src="/src/assets/nav/menu.svg" alt="" width="24" height="24" /></a>
+      </div>
+    </div>
   </header>
 
   <!-- The director mounts one <section class="beat"> per beat in here. -->

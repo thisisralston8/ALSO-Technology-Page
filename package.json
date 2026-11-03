@@ -1,13 +1,15 @@
 {
-  "name": "also-technology-page",
+  "name": "also-traffic-prototype",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Scroll-driven intro moment for the ALSO technology page: open road, flow, big scroll",
+  "description": "Variation of the ALSO technology page: open road, traffic, isometric platform",
   "scripts": {
-    "dev": "vite --port 4800",
+    "dev": "vite --port 4860",
+    "dev:phone": "vite --port 4860 --host",
+    "optimize": "node scripts/optimize-media.mjs",
     "build": "vite build",
-    "preview": "vite preview --port 4800"
+    "preview": "vite preview --port 4860"
   },
   "dependencies": {
     "gsap": "^3.15.0",

@@ -17,6 +17,8 @@
    overlapping handoffs below are a matter of reading two rects, not fighting
    three pinned elements for the same space. */
 
+import { paintCover } from './cover.js';
+
 export function createDirector({ root, handoffLayer, beats, deps }) {
   const { gsap, ScrollTrigger } = deps;
 
@@ -118,11 +120,30 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     img2.decoding = 'async';
     img2.className = 'seam__to';
     el.appendChild(img2);
+    // When the outgoing beat can hand over its picture as something drawable
+    // (`anchor().source`), the tile paints it here instead — synchronously, so
+    // it's on screen the frame the tile appears. An <img> given a new src is
+    // decoded later and shows nothing until then.
+    const cvs = document.createElement('canvas');
+    cvs.className = 'seam__paint';
+    el.appendChild(cvs);
+    // A colour over the picture, when the incoming beat's object is taking
+    // one on (`anchor().tint`) — Traffic's hero turning its own colour.
+    const tintEl = document.createElement('div');
+    tintEl.className = 'seam__tint';
+    el.appendChild(tintEl);
     handoffLayer.appendChild(el);
-    // The flying tile is the outgoing beat's image, so it trails with that beat's settings.
-    from.api.trail?.add(el);
+    // The tile trails with the settings of whichever beat's object it is. A
+    // tile that a beat draws on its own path (a live anchor — Traffic's hero)
+    // is already that beat's object, so it trails like the incoming beat;
+    // otherwise it's still the outgoing beat's image, flying.
+    const tileTrail = to.api.handedBy ? to.api.trail : from.api.trail;
+    tileTrail?.add(el, { mode: 'canvasFill', source: cvs });
 
-    const seam = { from, to, el, img, img2, trigger: null, active: false };
+    const seam = { from, to, el, img, img2, cvs, tintEl, painted: '', trigger: null, active: false, tileTrail };
+    // The incoming beat may want to know who hands it the tile (Traffic draws
+    // the hero with Open road's picture, from directly below where it left).
+    to.api.handedBy?.(from.api);
 
     // Exactly the window between the two beats: `bottom bottom` is the scroll
     // position where the outgoing beat reaches p=1 and its stage stops sticking;
@@ -137,7 +158,7 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
       // `seamEnd` (0..1 of the gap) lets the handoff finish before the next
       // stage has fully arrived. The incoming beat is already running (`lead`),
       // so its tile can take over mid-slide and simply keep going.
-      end: () => `bottom ${window.innerHeight * (1 - seamOpt(from, 'seamEnd', 1))}px`,
+      end: () => `bottom ${stageHeight() * (1 - seamOpt(from, 'seamEnd', 1))}px`,
       invalidateOnRefresh: true,
       onUpdate: (self) => renderSeam(seam, self.progress),
       onToggle: (self) => setSeamActive(seam, self.isActive),
@@ -184,6 +205,10 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     if (on) seam.to.api.anchor?.('entry', entryCtx(seam));
     seam.from.api.maskAnchor?.('exit', on);
     seam.to.api.maskAnchor?.('entry', on);
+    // Whichever way the square is changing hands, nothing should echo the
+    // holder it just left.
+    seam.tileTrail?.reset?.(seam.el);
+    seam.to.api.trail?.reset?.(seam.to.api.trailTarget?.());
     if (!on) seam.el.style.opacity = '';
     // Masking can change what the outgoing beat hands over (Open road freezes
     // its video and captures that frame), so draw the tile again now, with the
@@ -218,6 +243,36 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     const b = seam.to.api.anchor?.('entry', ctx);
     if (!a || !b) { seam.el.style.opacity = '0'; return; }
 
+    if (seam.img.getAttribute('src') !== a.src) seam.img.src = a.src;
+    if (seam.img2.getAttribute('src') !== b.src) seam.img2.src = b.src;
+    // Paint the outgoing picture straight into the tile's canvas when we can.
+    const usePaint = !!a.source;
+    seam.cvs.style.display = usePaint ? '' : 'none';
+    seam.img.style.visibility = usePaint ? 'hidden' : '';
+    const paintAt = (r) => {
+      if (!usePaint) return;
+      const k = `${a.key}|${Math.round(r.w)}x${Math.round(r.h)}`;
+      if (k !== seam.painted && paintCover(seam.cvs, a.source, r.w, r.h)) seam.painted = k;
+    };
+
+    // A *live* anchor means the incoming beat already has a path for its tile
+    // that starts at the outgoing one (Traffic's hero starts as Open road's
+    // square). The tile just sits on it — no flight of our own to meet it,
+    // so speed carries straight through both ends.
+    if (b.live) {
+      const r = b.rect;
+      seam.el.style.transform = `translate3d(${r.x}px, ${r.y}px, 0)`;
+      seam.el.style.width = r.w + 'px';
+      seam.el.style.height = r.h + 'px';
+      seam.el.style.opacity = '1';
+      seam.img2.style.opacity = '0';
+      paintAt(r);
+      const t = b.tint;
+      seam.tintEl.style.background = t ? t.colour : '';
+      seam.tintEl.style.opacity = t ? String(t.opacity) : '0';
+      return;
+    }
+
     const ar = clampRect(a.rect);
     const br = clampRect(b.rect);
 
@@ -246,13 +301,11 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     const x = cx - w / 2;
     const y = cy - h / 2;
 
-    if (seam.img.getAttribute('src') !== a.src) seam.img.src = a.src;
-    if (seam.img2.getAttribute('src') !== b.src) seam.img2.src = b.src;
-
     seam.el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     seam.el.style.width = w + 'px';
     seam.el.style.height = h + 'px';
     seam.el.style.opacity = '1';
+    paintAt({ w, h });
     // Cross-dissolve the picture only through the middle of the flight, so the
     // tile reads as one object changing its mind rather than two tiles swapping.
     seam.img2.style.opacity = String(clamp01((ts - 0.3) / 0.4));
@@ -305,12 +358,25 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     mounted.forEach((m) => { m.trigger.kill(); m.park.kill(); m.api.destroy?.(); m.section.remove(); });
   }
 
-  window.addEventListener('resize', debounce(relayout, 150));
+  // Re-measure on real size changes only. A phone browser's address bar
+  // showing or hiding changes the height by a strip — ignore that (sections
+  // are sized in lvh, which doesn't change with it); a width change or an
+  // orientation flip re-lays everything out.
+  let lastW = window.innerWidth, lastH = window.innerHeight;
+  window.addEventListener('resize', debounce(() => {
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w === lastW && Math.abs(h - lastH) < lastH * 0.25) return;
+    lastW = w; lastH = h;
+    relayout();
+  }, 150));
 
   return { beats: mounted, relayout, setConfig, scrollToBeat, destroy, byId };
 }
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+// A stage's height (100lvh): the seams measure in the same unit as the stages.
+const stageHeight = () => document.querySelector('.beat__stage')?.clientHeight || window.innerHeight;
 
 // Seam settings live on the outgoing beat's config so they're editable in the
 // inspector alongside the rest of that beat; the beat definition is a fallback.

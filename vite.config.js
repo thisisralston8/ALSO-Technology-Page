@@ -3,6 +3,8 @@ import { writeFile, readFile, mkdir, rename, access } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { optimizeAll, optimizeImage, optimizeVideo } from './scripts/optimize-media.mjs';
 
 const DEFAULTS = fileURLToPath(new URL('./src/defaults.json', import.meta.url));
 const BACKUP = fileURLToPath(new URL('./src/defaults.prev.json', import.meta.url));
@@ -95,6 +97,39 @@ function uploadVideo() {
   };
 }
 
+/* Optimized media (scripts/optimize-media.mjs): brought up to date when the
+   dev server starts and before every build, and for each new or changed file
+   in src/assets/traffic or video while the server runs — so dropping
+   an image in the traffic folder, or *Upload video…*, gets its small copy
+   without anyone running anything. Work is queued one file at a time. */
+function optimizedMedia() {
+  const ASSETS = fileURLToPath(new URL('./src/assets/', import.meta.url));
+  let queue = Promise.resolve();
+  const enqueue = (job) => { queue = queue.then(job).catch((e) => console.error('[media]', e.message || e)); return queue; };
+  const log = (m) => console.log(m);
+  let command = 'serve';
+  return {
+    name: 'optimized-media',
+    configResolved(c) { command = c.command; },
+    async buildStart() {
+      if (command !== 'build') return;     // the dev server handles its own
+      await optimizeAll(log);
+    },
+    configureServer(server) {
+      enqueue(() => optimizeAll(log));
+      const onFile = (file) => {
+        const rel = path.relative(ASSETS, file);
+        const [dir] = rel.split(path.sep);
+        if (rel.startsWith('..') || path.basename(file).startsWith('.')) return;
+        if (dir === 'traffic') enqueue(() => optimizeImage(file, dir, log));
+        else if (dir === 'video') enqueue(() => optimizeVideo(file, log));
+      };
+      server.watcher.on('add', onFile);
+      server.watcher.on('change', onFile);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [saveDefaults(), uploadVideo()],
+  plugins: [saveDefaults(), uploadVideo(), optimizedMedia()],
 });

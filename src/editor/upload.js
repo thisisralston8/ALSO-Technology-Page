@@ -49,11 +49,12 @@ async function send(stem, part, body, ext = '') {
   if (!out.ok) throw new Error(out.error || 'upload failed');
 }
 
-export function videoUploader({ director, saveState, persist }) {
+// `getConfig` / `onChange`: Open road's authored settings (desktop values +
+// phone overrides), so choosing the new video never bakes phone values in.
+export function videoUploader({ getConfig, onChange, saveState, persist }) {
   return async (file, onStatus = () => {}) => {
-    const m = director.byId('open-road');
-    if (!m) throw new Error('No Open road section');
-    const cfg = m.def.config;
+    const cfg = getConfig();
+    if (!cfg) throw new Error('No Open road section');
     const ext = extOf(file.name);
 
     // A name that isn't taken.
@@ -67,9 +68,7 @@ export function videoUploader({ director, saveState, persist }) {
 
     if (!persist) {
       const videos = [...(cfg.videos || []), { stem, src: URL.createObjectURL(file), poster: poster.url }];
-      const next = { ...cfg, videos, video: stem, heroMedia: 'video' };
-      director.setConfig('open-road', next);
-      saveState('open-road', next);
+      onChange({ ...cfg, videos, video: stem, heroMedia: 'video' });
       return { stem, saved: false };
     }
 
