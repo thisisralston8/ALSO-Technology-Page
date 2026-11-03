@@ -113,6 +113,9 @@ function optimizedMedia() {
     configResolved(c) { command = c.command; },
     async buildStart() {
       if (command !== 'build') return;     // the dev server handles its own
+      // The optimizer needs macOS (sips, AVFoundation). Elsewhere — Vercel's
+      // Linux builders — use the copies committed in src/assets/optimized.
+      if (process.platform !== 'darwin' || process.env.SKIP_MEDIA_OPTIMIZE) return;
       await optimizeAll(log);
     },
     configureServer(server) {
