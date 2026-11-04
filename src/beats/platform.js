@@ -76,6 +76,46 @@ const FRAG = /* glsl */`
   }
 `;
 
+/* The cursor lens, after Atelier UI's "Lens Media": a soft circle that
+   follows the cursor over the platform, pulling the picture inwards
+   (refraction) and splitting it into a spectrum towards its edge (chromatic
+   aberration, `uDispersion` samples from red through green to blue). Run as
+   a second pass over the drawn scene, and only while the lens is showing. */
+const LENS_VERT = /* glsl */`
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+const LENS_FRAG = /* glsl */`
+  precision highp float;
+  #define MAX_DISPERSION 64
+  varying vec2 vUv;
+  uniform sampler2D uMap;
+  uniform vec2 uMouse;
+  uniform float uAspect;
+  uniform float uSize;
+  uniform float uSoftness;
+  uniform float uAberration;
+  uniform float uRefraction;
+  uniform float uHover;
+  uniform int uDispersion;
+  void main() {
+    vec2 toCenter = vUv - uMouse;
+    float radius = length(vec2(toCenter.x * uAspect, toCenter.y));
+    float mask = (1.0 - smoothstep(uSize, uSize + uSoftness, radius)) * uHover;
+    vec2 refracted = vUv - toCenter * uRefraction * mask;
+    vec2 shift = toCenter * uAberration * mask;
+    vec3 color = vec3(0.0), total = vec3(0.0);
+    for (int i = 0; i < MAX_DISPERSION; i++) {
+      if (i >= uDispersion) break;
+      float t = (float(i) + 0.5) / float(uDispersion);
+      vec3 w = clamp(1.0 - 2.0 * abs(t - vec3(0.0, 0.5, 1.0)), 0.0, 1.0);
+      color += texture2D(uMap, refracted + shift * (1.0 - 2.0 * t)).rgb * w;
+      total += w;
+    }
+    gl_FragColor = vec4(color / max(total, vec3(1e-4)), 1.0);
+  }
+`;
+
 // Layer 1 is the top of the platform (Hardware), layer 3 the base (Autonomy).
 const LAYERS = [1, 2, 3];
 const MAX_PLANES = 160;
@@ -167,6 +207,24 @@ export function createPlatform(el, config) {
     // The cap: a plain face on top of the top layer. It is the white dot.
     cap = makeStack(1);
     cap.mesh.renderOrder = 10;
+
+    // The lens pass: the scene is drawn into `lens.target` (made on first
+    // use, at the canvas's pixel size), then this quad draws it to the screen
+    // through the lens.
+    lens.scene = new THREE.Scene();
+    lens.camera = new THREE.Camera();
+    lens.mat = new THREE.ShaderMaterial({
+      vertexShader: LENS_VERT, fragmentShader: LENS_FRAG,
+      depthTest: false, depthWrite: false,
+      uniforms: {
+        uMap: { value: null }, uMouse: { value: new THREE.Vector2(0.5, 0.5) }, uAspect: { value: 1 },
+        uSize: { value: 0.12 }, uSoftness: { value: 0.5 }, uAberration: { value: 0.18 },
+        uRefraction: { value: 0.4 }, uHover: { value: 0 }, uDispersion: { value: 35 },
+      },
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lens.mat);
+    quad.frustumCulled = false;
+    lens.scene.add(quad);
 
     M = new THREE.Matrix4();
     Q = new THREE.Quaternion();
@@ -367,6 +425,13 @@ export function createPlatform(el, config) {
   let clock = 0;                                     // seconds of ambient motion
   const tilt = { x: 0, y: 0, vx: 0, vy: 0 };
   const mouse = { x: 0, y: 0 };
+  // The lens: where it is on the canvas (0–1, y up), how much it's showing,
+  // and where the cursor is (client px, or null when it's off the page or
+  // not a mouse). Like the lean, it runs on time, never on scroll.
+  const lens = { x: 0.5, y: 0.5, hover: 0, reveal: 0, scene: null, camera: null, mat: null, target: null };
+  const pointer = { x: 0, y: 0, in: false };
+  const canHover = matchMedia('(hover: hover) and (pointer: fine)');
+  const lensOn = () => cfg.lens === 'on' && canHover.matches;
 
   function render(p) {
     if (!geo.W) computeGeometry();
@@ -484,7 +549,31 @@ export function createPlatform(el, config) {
     cap.mesh.visible = st.cap > 0.001;
 
     renderer.setClearColor(new THREE.Color().setRGB(...rgb(cfg.night)), 1);
+    lens.reveal = reveal;
+    if (lens.hover > 0.001 && lensOn()) drawThroughLens();
+    else renderer.render(scene, camera);
+  }
+
+  function drawThroughLens() {
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    if (!lens.target || lens.target.width !== size.x || lens.target.height !== size.y) {
+      lens.target?.dispose();
+      lens.target = new THREE.WebGLRenderTarget(size.x, size.y, { samples: phone ? 0 : 4 });
+    }
+    renderer.setRenderTarget(lens.target);
     renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    const u = lens.mat.uniforms;
+    u.uMap.value = lens.target.texture;
+    u.uMouse.value.set(lens.x, lens.y);
+    u.uAspect.value = geo.W / geo.H;
+    u.uSize.value = cfg.lensSize;
+    u.uSoftness.value = cfg.lensSoftness;
+    u.uAberration.value = cfg.lensAberration;
+    u.uRefraction.value = cfg.lensRefraction;
+    u.uDispersion.value = Math.max(1, Math.min(64, Math.round(cfg.lensDispersion)));
+    u.uHover.value = lens.hover;
+    renderer.render(lens.scene, lens.camera);
   }
 
   /* ---------- the ambient clock ---------- */
@@ -501,16 +590,42 @@ export function createPlatform(el, config) {
     tilt.vx += (mouse.x - tilt.x) * k * dt; tilt.vx -= tilt.vx * c * dt;
     tilt.vy += (mouse.y - tilt.y) * k * dt; tilt.vy -= tilt.vy * c * dt;
     tilt.x += tilt.vx * dt; tilt.y += tilt.vy * dt;
+    // The lens follows the cursor, damped by Smoothing, and shows while the
+    // cursor is over the platform's canvas — not while it's still the dot,
+    // and not under the explore modal.
+    let lensing = false;
+    if (lensOn() && renderer) {
+      const r = canvas.getBoundingClientRect();
+      const over = pointer.in && r.width > 0
+        && pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom
+        && !document.documentElement.classList.contains('xm-open');
+      const tx = over ? (pointer.x - r.left) / r.width : lens.x;
+      const ty = over ? 1 - (pointer.y - r.top) / r.height : lens.y;
+      const th = over ? lens.reveal : 0;
+      // Jump to the cursor when the lens is out of sight, so it never sweeps
+      // in from wherever it was last.
+      const a = lens.hover < 0.001 ? 1 : 1 - Math.exp(-cfg.lensSmoothing * dt);
+      lens.x += (tx - lens.x) * a; lens.y += (ty - lens.y) * a;
+      lens.hover += (th - lens.hover) * (1 - Math.exp(-cfg.lensSmoothing * dt));
+      if (th === 0 && lens.hover < 0.001) lens.hover = 0;
+      lensing = lens.hover > 0 || th > 0;
+    } else if (lens.hover) { lens.hover = 0; lensing = true; }
     // Draw only when something has changed: the scroll, the ambient drift or
     // float, or the lean still settling towards the cursor.
     const ambient = !reduced.matches && (cfg.flow > 0 || cfg.float > 0);
     const leaning = cfg.tilt > 0 && (Math.abs(tilt.vx) + Math.abs(tilt.vy) > 1e-4 || Math.abs(mouse.x - tilt.x) + Math.abs(mouse.y - tilt.y) > 1e-3);
-    if (ambient || leaning || drawnAt !== progress) render(progress);
+    if (ambient || leaning || lensing || drawnAt !== progress) render(progress);
     raf = onScreen ? requestAnimationFrame(frame) : 0;
   }
 
-  const onMove = (e) => { mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = (e.clientY / innerHeight) * 2 - 1; };
+  const onMove = (e) => {
+    mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = (e.clientY / innerHeight) * 2 - 1;
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = e.pointerType === 'mouse' || e.pointerType === 'pen';
+  };
+  // Leaving the window takes the lens away.
+  const onOut = (e) => { if (!e.relatedTarget) pointer.in = false; };
   addEventListener('pointermove', onMove, { passive: true });
+  document.addEventListener('pointerout', onOut);
 
   const io = new IntersectionObserver(([e]) => {
     onScreen = e.isIntersecting;
@@ -540,6 +655,8 @@ export function createPlatform(el, config) {
     destroy() {
       io.disconnect();
       removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerout', onOut);
+      lens.target?.dispose();
       if (raf) cancelAnimationFrame(raf);
       renderer?.dispose();
       reveals.forEach(({ r }) => r.destroy());
@@ -664,6 +781,15 @@ export const PLATFORM_DEFAULTS = {
   float: 1.2,              // degrees of idle drift
   floatSpeed: 0.15,        // cycles per second
   tilt: 5,                 // degrees it leans towards the cursor
+  // Cursor lens over the platform (Atelier UI's Lens Media). Sizes are shares
+  // of the canvas's height.
+  lens: 'on',              // 'on' | 'off'
+  lensSize: 0.12,          // radius of the clear centre
+  lensSoftness: 0.5,       // how far past that it fades out
+  lensAberration: 0.18,    // how far the colours split apart
+  lensDispersion: 35,      // colour samples across the split (1–64; fewer is cheaper, banded)
+  lensRefraction: 0.4,     // how strongly it pulls the picture in towards the cursor
+  lensSmoothing: 7,        // how quickly it catches up with the cursor (higher = snappier)
 
   // Colour
   night: '#000000',

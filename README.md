@@ -52,6 +52,20 @@ Between the Hardware and Autonomy stops, the platform doesn't scroll freely (`sr
 - **Settings:** in Isometric platform → Story → **Stepping through the layers**: on/off, move duration, ease, and the pause the wheel needs before the next gesture counts. The pause is what makes a trackpad flick's glide count as one step.
 - **How:** it hooks Lenis's `virtualScroll` and moves with `lenis.scrollTo`. The beat itself is unchanged.
 
+### Cursor lens
+
+A lens follows the cursor over the isometric platform, after Atelier UI's [Lens Media](https://www.atelier-ui.com/en/docs/components/cursor/lens-media). It pulls the picture in towards the cursor and splits its colours into a spectrum towards the edge.
+
+- **How it's drawn:** a second pass in the platform's own three.js renderer (`LENS_FRAG` in `beats/platform.js`). The scene is drawn into an offscreen texture, and a full-screen quad draws it through the lens.
+- **Cost:** the pass runs only while the lens is showing. At rest the scene draws straight to the screen as before.
+- **When it shows:** while the cursor is over the platform. It fades away when the cursor leaves the window, while the platform is still the dot, and under the Explore modal.
+- **Phones:** none, because there's no hover. It's mouse and trackpad only.
+- **Motion:** it follows the cursor on time, damped by **Smoothing**, like the lean.
+- **Settings:** Isometric platform → Look → **Cursor lens**:
+  - **Lens** on / off.
+  - **Size**, **Softness**, **Aberration**, **Dispersion**, **Refraction** and **Smoothing**, with the same defaults as the original.
+  - Sizes are shares of the platform's height.
+
 ### Explore modal
 
 The platform's **Explore** buttons open a modal (`src/modal.js`), after pda.archi/expertises:
