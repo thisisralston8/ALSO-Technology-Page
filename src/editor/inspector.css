@@ -408,3 +408,18 @@ html.is-previewing #page { visibility: hidden; }
 /* Media thumbnails: videos are marked, and "None" is the empty placeholder. */
 .thumbs button.is-video { color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 .thumbs button.is-none { color: #9a9a9a; font: inherit; font-size: 10px; }
+
+/* A modal media thumbnail with its delete button, shown on hover. */
+.thumb { position: relative; display: grid; }
+.thumb > button[data-stem] { width: 100%; }
+.thumbs .thumb__del {
+  position: absolute; top: 2px; right: 2px;
+  width: 16px; height: 16px; aspect-ratio: auto;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.75); border: 0; border-radius: 3px;
+  color: #fff; font: inherit; font-size: 12px; line-height: 1;
+  opacity: 0; transition: opacity 0.12s;
+}
+.thumb:hover .thumb__del, .thumb__del:focus-visible { opacity: 1; }
+.thumbs .thumb__del:hover { background: #c4372a; }
+@media (hover: none) { .thumbs .thumb__del { opacity: 1; } }

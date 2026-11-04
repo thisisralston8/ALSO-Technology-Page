@@ -91,7 +91,7 @@ The platform's **Explore** buttons open a modal (`src/modal.js`), after pda.arch
   - **Below 1024 px** everything stacks as in the phone frames.
   - **Card → Padding inside** (default 0, as in the frames) and **Image corners** are settings. The headline is **Headline size** (Figma: 96 desktop, 44 phone).
 - **Images and videos:** every image in the frames is a *slot*, set in Isometric platform → **Modal content**, a group per layer.
-  - Each slot takes an image or a video: pick one from the thumbnails, upload one (**Upload image or video…**), or **None** for the white placeholder, which is labelled with its slot.
+  - Each slot takes an image or a video: pick one from the thumbnails, upload one (**Upload image or video…**), or **None** for the white placeholder, which is labelled with its slot. The **×** on a thumbnail (on hover) deletes that file: the file goes to the macOS Trash, its poster and optimized copies are removed, and every slot using it — desktop and phone, in the panel and in `defaults.json` — is emptied (`/__delete-media` in `vite.config.js`; dev server only).
   - **Shape** is the slot's aspect ratio. **File** uses the image or video's own. The media fills the shape, and **Crop focus** across / down sets what stays in view.
   - Desktop and phone are separate. With **Mobile** selected at the top of the panel, a slot's file, shape and crop are the phone's own. The phone starts from the shapes in the phone frames, and from the desktop file until you pick one.
   - Videos are muted and loop. They play only while on screen, and stop when the modal closes.

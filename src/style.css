@@ -249,6 +249,8 @@ body {
 
 /* ---------- grain + warmth (see grain.js) ----------
    Above every beat, the nav and the handoff layer; below the editor (100).
+   The noise also sits above the explore modal (96), so its cards get the
+   same finish; the warmth tint stays under it.
    The grain layer is one tile larger than the screen up and to the left, so
    it still covers everything wherever its jitter moves it. */
 
@@ -261,7 +263,7 @@ body {
   left: calc(-1 * var(--grain-tile));
   right: 0;
   bottom: 0;
-  z-index: 90;
+  z-index: 97;
   background-repeat: repeat;
   will-change: transform;
 }
@@ -366,17 +368,18 @@ html.is-wireframe .traf__car.is-photo {
 /* Layout grid overlay (src/grid.js): Figma-style red columns, above the page
    and its grain, below the inspector. */
 .grid-overlay {
-  position: fixed; inset: 0; z-index: 95;
+  position: fixed; inset: 0; z-index: 98;
   display: grid; pointer-events: none;
 }
 .grid-overlay[hidden] { display: none; }
 .grid-overlay i { background: rgba(255, 0, 0, 0.08); }
 
 /* ---------- explore modal (modal.js) ----------
-   Above the nav, the grain and the grid overlay; below the editor (100).
+   Above the nav and the warmth tint; below the grain noise (97), the grid
+   overlay (98) and the editor (100).
    Its content follows the Figma frames; see the content rules further down. */
 
-.xm { position: fixed; inset: 0; z-index: 97; }
+.xm { position: fixed; inset: 0; z-index: 96; }
 /* The text block the card grew out of, while the card is open. */
 .xm-origin { visibility: hidden !important; }
 /* …except its headline, when closing fades it in place (modal.js). */
@@ -416,20 +419,22 @@ html.is-wireframe .traf__car.is-photo {
   /* The content scales with the card (see .xm__body). */
   container-type: inline-size;
 }
-/* "01 ······ Hardware": the number on the left, the headline on the right,
-   on one baseline. */
+/* "Hardware ······ 01": the headline on the left, where the platform's own
+   headline sits, so it has less far to fly on open and close; the number on
+   the right, on one baseline. */
 .xm__head {
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex; flex-direction: row-reverse; align-items: baseline; justify-content: space-between;
   gap: 16px;
   margin-bottom: 40px;
 }
 .xm__num {
   flex: 1;
+  text-align: right;
   font: 900 24px/28px 'Serial C', var(--display);
   text-transform: uppercase;
 }
 .xm__title, .xm__ghost { font-weight: 400; line-height: 0.92; letter-spacing: -0.052em; }
-.xm__title { margin: 0; text-align: right; white-space: nowrap; }
+.xm__title { margin: 0; text-align: left; white-space: nowrap; }
 .xm__x {
   position: absolute;
   left: 50%;

@@ -23,7 +23,7 @@ import { createGrain, GRAIN_DEFAULTS } from './grain.js';
 import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
 import { GRID_DEFAULTS, GRID_MOBILE, setGrid, showGridOverlay } from './grid.js';
 import { load as loadSaved, save as saveState, saveDefaults, loadView, watch } from './editor/store.js';
-import { videoUploader, mediaUploader } from './editor/upload.js';
+import { videoUploader, mediaUploader, mediaDeleter } from './editor/upload.js';
 import savedDefaults from './defaults.json';
 
 gsap.registerPlugin(ScrollTrigger, Observer);
@@ -308,6 +308,7 @@ const inspector = embedded ? null : createInspector({
   onSaveDefaults: import.meta.env.DEV ? () => saveDefaults(currentSettings()) : null,
   media: modalMedia,
   onUploadMedia: mediaUploader({ library: modalMedia, persist: import.meta.env.DEV }),
+  onDeleteMedia: mediaDeleter({ library: modalMedia, persist: import.meta.env.DEV }),
   onUploadVideo: videoUploader({ getConfig: () => authored['open-road'], onChange: (next) => onChange('open-road', next), saveState, persist: import.meta.env.DEV }),
   getConfig: (id) => authored[id],
   onChange,

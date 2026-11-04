@@ -10,7 +10,7 @@ import { exportAll, importAll, reset, loadView, saveView } from './store.js';
 import { cleanSvg } from '../svgIcon.js';
 import './inspector.css';
 
-export function createInspector({ director, images, media = [], onChange, getConfig, extras = [], onSaveDefaults = null, onUploadVideo = null, onUploadMedia = null, phoneQuery = '(max-width: 1023px)', sheetQuery = '(max-width: 767px)' }) {
+export function createInspector({ director, images, media = [], onChange, getConfig, extras = [], onSaveDefaults = null, onUploadVideo = null, onUploadMedia = null, onDeleteMedia = null, phoneQuery = '(max-width: 1023px)', sheetQuery = '(max-width: 767px)' }) {
   /* Desktop | Mobile. Every section's settings are its desktop values plus a
      `mobile` set of overrides (main.js applies them below the phone
      breakpoint). In Mobile mode a control shows and edits the phone value; a
@@ -601,13 +601,34 @@ export function createInspector({ director, images, media = [], onChange, getCon
     }
 
     if (row.type === 'media') {
+      // Deleting a file empties every slot that uses it — desktop and phone,
+      // on every slot — before the page reloads without it.
+      const deleteMedia = async (stem) => {
+        const uses = [];
+        const c = cfgOf(id);
+        const scan = (o, where) => o && Object.entries(o).forEach(([k, v]) => { if (k.startsWith('modalMedia_') && v === stem) uses.push(where); });
+        scan(c, 'desktop'); scan(c.mobile, 'phone');
+        const note = uses.length ? `\n\nIt's used in ${uses.length} slot${uses.length > 1 ? 's' : ''}, which will be emptied.` : '';
+        const where = import.meta.env.DEV ? ' It goes to the Trash.' : '';
+        if (!confirm(`Delete “${stem}”?${where}${note}`)) return;
+        try {
+          const strip = (o) => o && Object.fromEntries(Object.entries(o).map(([k, v]) => [k, k.startsWith('modalMedia_') && v === stem ? '' : v]));
+          await onDeleteMedia(stem);
+          onChange(id, { ...strip(c), ...(c.mobile ? { mobile: strip(c.mobile) } : {}) });
+          renderBody();
+        } catch (e) {
+          alert(`Couldn't delete “${stem}”: ${e.message || e}`);
+        }
+      };
       // An image or video for one of the Explore modal's slots: the files in
       // src/assets/modal, by thumbnail (videos by poster, marked ▶), plus an
       // upload button and a way back to the empty placeholder. Stored by name.
       const grid = document.createElement('div');
       grid.className = 'thumbs';
-      const sync = () => grid.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.stem === (read() || '')));
+      const sync = () => grid.querySelectorAll('button[data-stem]').forEach((b) => b.classList.toggle('on', b.dataset.stem === (read() || '')));
       media.forEach((it) => {
+        const cell = document.createElement('div');
+        cell.className = 'thumb';
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.stem = it.stem;
@@ -615,7 +636,18 @@ export function createInspector({ director, images, media = [], onChange, getCon
         if (it.thumb) b.style.backgroundImage = `url(${it.thumb})`;
         if (it.kind === 'video') { b.classList.add('is-video'); b.textContent = '▶'; }
         b.addEventListener('click', () => write(it.stem));
-        grid.appendChild(b);
+        cell.appendChild(b);
+        if (onDeleteMedia) {
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'thumb__del';
+          del.title = `Delete ${it.stem}`;
+          del.setAttribute('aria-label', `Delete ${it.stem}`);
+          del.textContent = '×';
+          del.addEventListener('click', (e) => { e.stopPropagation(); deleteMedia(it.stem); });
+          cell.appendChild(del);
+        }
+        grid.appendChild(cell);
       });
       const none = document.createElement('button');
       none.type = 'button';

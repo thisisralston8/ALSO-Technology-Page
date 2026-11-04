@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import { writeFile, readFile, mkdir, rename, access } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, rename, access, rm, copyFile } from 'node:fs/promises';
+import os from 'node:os';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,7 @@ const DEFAULTS = fileURLToPath(new URL('./src/defaults.json', import.meta.url));
 const BACKUP = fileURLToPath(new URL('./src/defaults.prev.json', import.meta.url));
 const VIDEO_DIR = fileURLToPath(new URL('./src/assets/video/', import.meta.url));
 const MODAL_DIR = fileURLToPath(new URL('./src/assets/modal/', import.meta.url));
+const MODAL_OPT_DIR = fileURLToPath(new URL('./src/assets/optimized/modal/', import.meta.url));
 // Uploads land here first, outside anything Vite watches, and are moved into
 // place only once both files are complete.
 const UPLOAD_TMP = fileURLToPath(new URL('./node_modules/.also-uploads/', import.meta.url));
@@ -150,6 +152,66 @@ function uploadMedia() {
   };
 }
 
+/* "Delete" on a modal media thumbnail (inspector.js): removes the file from
+   src/assets/modal with its poster and optimized copies, and clears it from
+   any slot in defaults.json that uses it. On macOS the files go to the Trash,
+   so a slip can be undone from Finder; elsewhere they're removed. */
+function deleteMedia() {
+  const trash = path.join(os.homedir(), '.Trash');
+  const discard = async (file) => {
+    if (process.platform !== 'darwin') return rm(file, { force: true });
+    const { name, ext } = path.parse(file);
+    let dest = path.join(trash, name + ext);
+    for (let k = 2; await access(dest).then(() => true, () => false); k++) dest = path.join(trash, `${name} ${k}${ext}`);
+    // Not rename(): the Trash can be on another volume.
+    await copyFile(file, dest);
+    await rm(file, { force: true });
+  };
+  return {
+    name: 'delete-media',
+    configureServer(server) {
+      server.middlewares.use('/__delete-media', async (req, res) => {
+        const send = (code, body) => {
+          res.statusCode = code;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(body));
+        };
+        if (req.method !== 'POST') return send(405, { ok: false, error: 'POST only' });
+        const stem = new URL(req.url, 'http://x').searchParams.get('stem') || '';
+        if (!/^[a-z0-9][a-z0-9-]{0,60}$/i.test(stem)) return send(400, { ok: false, error: 'bad name' });
+        try {
+          const exists = (f) => access(f).then(() => f, () => null);
+          // One name per extension: on macOS's case-insensitive disk this also
+          // finds `.JPG`, and asking for both would find the same file twice.
+          const originals = (await Promise.all([...IMAGE_EXT, ...VIDEO_EXT]
+            .map((e) => exists(MODAL_DIR + `${stem}.${e}`)))).filter(Boolean);
+          if (!originals.length) return send(404, { ok: false, error: 'file not found' });
+          const extras = (await Promise.all([
+            MODAL_DIR + `posters/${stem}.jpg`,
+            MODAL_OPT_DIR + `${stem}.jpg`,
+            MODAL_OPT_DIR + `${stem}.desktop.mp4`,
+            MODAL_OPT_DIR + `${stem}.mobile.mp4`,
+          ].map(exists))).filter(Boolean);
+          for (const f of originals) await discard(f);
+          for (const f of extras) await rm(f, { force: true });
+          // Clear it from saved slots, so the defaults don't point at nothing.
+          const saved = JSON.parse(await readFile(DEFAULTS, 'utf8').catch(() => '{}'));
+          let changed = false;
+          const scrub = (o) => o && Object.keys(o).forEach((k) => {
+            if (k.startsWith('modalMedia_') && o[k] === stem) { o[k] = ''; changed = true; }
+          });
+          scrub(saved.platform);
+          scrub(saved.platform?.mobile);
+          if (changed) await writeFile(DEFAULTS, JSON.stringify(saved, null, 2) + '\n');
+          send(200, { ok: true, stem });
+        } catch (e) {
+          send(500, { ok: false, error: String(e.message || e) });
+        }
+      });
+    },
+  };
+}
+
 /* Optimized media (scripts/optimize-media.mjs): brought up to date when the
    dev server starts and before every build, and for each new or changed file
    in src/assets/traffic or video while the server runs — so dropping
@@ -188,5 +250,5 @@ function optimizedMedia() {
 }
 
 export default defineConfig({
-  plugins: [saveDefaults(), uploadVideo(), uploadMedia(), optimizedMedia()],
+  plugins: [saveDefaults(), uploadVideo(), uploadMedia(), deleteMedia(), optimizedMedia()],
 });

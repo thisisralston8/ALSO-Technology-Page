@@ -148,3 +148,21 @@ export function mediaUploader({ library, persist }) {
     return { stem, saved: true };
   };
 }
+
+/* "Delete" on a modal media thumbnail. On the dev server the file goes
+   (vite.config.js → deleteMedia: to the Trash on macOS, with its poster and
+   optimized copies) and the page reloads without it. In a static build
+   nothing can be deleted, so it's only dropped from the list for this visit. */
+export function mediaDeleter({ library, persist }) {
+  return async (stem) => {
+    if (persist) {
+      const res = await fetch(`/__delete-media?stem=${encodeURIComponent(stem)}`, { method: 'POST' });
+      const out = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      if (!out.ok) throw new Error(out.error || 'delete failed');
+    }
+    const i = library.findIndex((m) => m.stem === stem);
+    if (i >= 0) library.splice(i, 1);
+    if (persist) setTimeout(() => location.reload(), 300);
+    return { saved: persist };
+  };
+}

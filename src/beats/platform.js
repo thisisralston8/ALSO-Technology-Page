@@ -548,10 +548,27 @@ export function createPlatform(el, config) {
     cap.mat.uniforms.uFeather.value = L(1, 'Feather') * reveal;
     cap.mesh.visible = st.cap > 0.001;
 
-    renderer.setClearColor(new THREE.Color().setRGB(...rgb(cfg.night)), 1);
     lens.reveal = reveal;
     if (lens.hover > 0.001 && lensOn()) drawThroughLens();
-    else renderer.render(scene, camera);
+    else {
+      setClear(THREE.SRGBColorSpace);
+      renderer.render(scene, camera);
+    }
+  }
+
+  /* The background is the Night colour exactly as written, the same as the
+     page's CSS — whichever way the frame is drawn. The planes' shaders write
+     raw values; only the clear colour goes through three's colour
+     management, which converts it to the target's colour space: to sRGB for
+     the screen, not at all for the lens's render target. So it's given in
+     the space the target expects — sRGB for the screen (converted back to
+     the same value), linear for the target (left alone). Given as linear
+     for the screen, #050505 would come out as #252525, and the background
+     would lift to grey whenever the lens faded out. */
+  const clearColour = { c: null };
+  function setClear(space) {
+    clearColour.c ||= new THREE.Color();
+    renderer.setClearColor(clearColour.c.setRGB(...rgb(cfg.night), space), 1);
   }
 
   function drawThroughLens() {
@@ -560,6 +577,7 @@ export function createPlatform(el, config) {
       lens.target?.dispose();
       lens.target = new THREE.WebGLRenderTarget(size.x, size.y, { samples: phone ? 0 : 4 });
     }
+    setClear(THREE.LinearSRGBColorSpace);
     renderer.setRenderTarget(lens.target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
