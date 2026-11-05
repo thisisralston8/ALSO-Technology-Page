@@ -130,7 +130,7 @@ body {
    when it shows and hides (`100vh` means the same on desktop). */
 .beat {
   position: relative;
-  height: calc(var(--len, 4) * 100lvh);
+  height: calc((var(--len, 4) + var(--cover-extra, 0)) * 100lvh);
 }
 .beat__stage {
   position: sticky;
@@ -247,6 +247,113 @@ body {
   will-change: transform;
 }
 
+/* ---------- beat 4: platform verticals (placeholder) ---------- */
+
+/* Laid out after the Figma frames: a headline, then three categories with a
+   small number up and to the right of each; the block centred on screen.
+   Sizes, gaps and grid columns are settings (verticals.js). */
+.vert { background: #FCF5ED; }
+.vert__block {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: flex-start;
+  transform: translateY(-50%);
+}
+.vert__head { margin: 0; font-weight: 400; }
+.vert__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; align-items: flex-start; }
+.vert__item { display: flex; flex-direction: column; align-items: flex-start; }
+.vert__line { display: flex; align-items: flex-start; }
+.vert__name { white-space: nowrap; font-weight: 400; }
+.vert__num { font-family: 'Serial C', var(--display); font-weight: 900; text-transform: uppercase; }
+/* Line reveal masks (lineReveal.js) clip at the line box, and this type is
+   set tighter than its glyphs (112 px leading on 120 px type), so the masks
+   get room below for descenders (g, Q) — taken back with a negative margin,
+   so the layout doesn't move. */
+.vert .rv-line-mask { padding-bottom: 0.3em; margin-bottom: -0.3em; }
+/* Statistics under their categories (`statMode: 'under'`, phones). */
+.vert__note { display: none; max-width: 100%; }
+.vert--under .vert__note { display: block; }
+
+/* The statistic beside the cursor (verticals.js): page chrome like the
+   cursor, just under it. Its lines are stacked in one place so switching
+   category is a crossfade. */
+.vert-tip {
+  position: fixed; top: 0; left: 0;
+  z-index: 94;
+  display: grid;
+  pointer-events: none;
+  will-change: transform;
+}
+.vert-tip p { grid-area: 1 / 1; margin: 0; white-space: nowrap; opacity: 0; }
+/* The dot, become the cursor (verticals.js): over the page and its grain's
+   tint, under the grain itself, the modal and the editor. */
+.vert-cursor {
+  position: fixed; top: 0; left: 0;
+  z-index: 95;
+  display: none;
+  pointer-events: none;
+  will-change: transform;
+}
+/* Hidden over the page; the editor keeps its own cursors. */
+html.has-vert-cursor body > :not(.insp, .insp__show, .phone-preview),
+html.has-vert-cursor body > :not(.insp, .insp__show, .phone-preview) * { cursor: none !important; }
+
+/* ---------- beat 5: investors and careers ---------- */
+
+/* Above Platform verticals (z 5), so its pixel band — hanging above its top
+   edge — draws over that section's end; not clipped, for the same reason. */
+.beat__stage.pix { z-index: 6; overflow: visible; background: #000; }
+.pix__band { position: absolute; left: 0; pointer-events: none; }
+/* The cursor trail: fixed to the screen, drawn only over this section;
+   under its text. */
+.pix__trail { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+/* Investors (careers.js): stacked from the section's top, each part placed
+   on the grid with its own margin and width. Above the cursor trail. */
+.pix__inv { position: absolute; left: 0; right: 0; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.pix__head { margin: 0; font-weight: 400; }
+.pix__list { display: flex; flex-direction: column; }
+.pix__name { margin: 0; font-weight: 400; white-space: nowrap; }
+.pix__rule { width: 100%; transform-origin: 0 50%; }
+.pix__contacts { display: flex; align-items: center; white-space: nowrap; }
+.pix__contact { display: flex; flex-direction: column; align-items: flex-start; }
+.pix__contact p { margin: 0; }
+.pix__contact a { color: inherit; text-decoration: underline; text-underline-position: from-font; text-decoration-thickness: from-font; }
+/* Room below the reveal masks for descenders (see .vert). */
+.pix .rv-line-mask { padding-bottom: 0.3em; margin-bottom: -0.3em; }
+.pix__title { position: absolute; z-index: 1; margin: 0; font-weight: 400; line-height: 0.92; letter-spacing: -0.052em; }
+
+/* ---------- beat 6: footer ---------- */
+
+/* Under Investors and careers (no z-index of its own), and clipped to its
+   own box, so its content — held back by the parallax — only shows where
+   the section above has uncovered it. */
+.beat__stage.foot { overflow: hidden; background: #000; }
+.foot__content { position: absolute; inset: 0; will-change: transform; }
+.foot__shade { position: absolute; inset: 0; pointer-events: none; }
+/* Content after the Figma frame "Desktop - 119"; sizes and places are
+   settings (footer.js). */
+.foot a { color: inherit; text-decoration: none; }
+.foot__intro { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
+.foot__head { margin: 0; font-weight: 400; }
+.foot__btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  height: 40px; min-width: 80px; padding: 8px 20px; box-sizing: border-box;
+  border: 1px solid; border-radius: 999px;
+  font: 900 16px/24px 'Serial C', var(--display); text-transform: uppercase; white-space: nowrap;
+}
+.foot__btn img { display: block; width: 24px; height: 24px; }
+.foot__col { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
+.foot__coltitle { margin: 0; font-family: 'Serial C', var(--display); font-weight: 900; text-transform: uppercase; }
+.foot__items { display: flex; flex-direction: column; align-items: flex-start; }
+.foot__items a { display: block; }
+.foot__logomask { position: absolute; overflow: clip; }
+/* Once the wordmark is up, the full stop's squares may be pushed past it. */
+.foot__logomask.is-open { overflow: visible; }
+.foot__logo { position: relative; display: block; width: 100%; height: 100%; }
+.foot__logo svg { display: block; width: 100%; height: 100%; }
+.foot__field { position: absolute; pointer-events: none; }
+.foot__legal { position: absolute; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
+.foot .rv-line-mask { padding-bottom: 0.3em; margin-bottom: -0.3em; }
+
 /* ---------- grain + warmth (see grain.js) ----------
    Above every beat, the nav and the handoff layer; below the editor (100).
    The noise also sits above the explore modal (96), so its cards get the
@@ -288,6 +395,13 @@ html.is-wireframe .traf__car.is-photo {
 /* ---------- joins ---------- */
 
 .beat--join { margin-top: -100lvh; }
+/* A section that rises over the previous one's last screen (director
+   `cover`): pulled up a screen, and above it. The previous section gets
+   that screen added, so its own scroll is unchanged. */
+.beat--covered { --cover-extra: 1; }
+.beat--cover { margin-top: -100lvh; z-index: 5; }
+/* A section that scrolls like a page (director `flow`): no sticky stage. */
+.beat--flow .beat__stage { position: relative; height: 100%; }
 
 /* ---------- beat 3: isometric platform ---------- */
 

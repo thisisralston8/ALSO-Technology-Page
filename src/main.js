@@ -1,4 +1,4 @@
-/* Boot. One Lenis, one ScrollTrigger, one director, three beats.
+/* Boot. One Lenis, one ScrollTrigger, one director, six beats.
 
    The beats own no scroll of their own — that was the whole point of the port.
    `image-flow` had its own Lenis and ScrollTrigger; `type-scroll` had its own
@@ -15,6 +15,9 @@ import { createDirector } from './director.js';
 import { createOpenRoad, OPEN_ROAD_DEFAULTS, OPEN_ROAD_MOBILE } from './beats/open-road.js';
 import { createTraffic, TRAFFIC_DEFAULTS, TRAFFIC_MOBILE } from './beats/traffic.js';
 import { createPlatform, PLATFORM_DEFAULTS, PLATFORM_MOBILE } from './beats/platform.js';
+import { createVerticals, VERTICALS_DEFAULTS, VERTICALS_MOBILE } from './beats/verticals.js';
+import { createCareers, CAREERS_DEFAULTS, CAREERS_MOBILE } from './beats/careers.js';
+import { createFooter, FOOTER_DEFAULTS, FOOTER_MOBILE } from './beats/footer.js';
 import { createNav } from './nav.js';
 import { createModal } from './modal.js';
 import { createSteps } from './steps.js';
@@ -174,6 +177,9 @@ function compose(id) {
   if (id === 'page') return withMobile('page', { ...PAGE_DEFAULTS, ...l }, PAGE_MOBILE);
   if (id === 'traffic') return withMobile('traffic', { ...TRAFFIC_DEFAULTS, ...l, images: trafficImages }, TRAFFIC_MOBILE);
   if (id === 'platform') return withMobile('platform', { ...PLATFORM_DEFAULTS, ...l }, PLATFORM_MOBILE);
+  if (id === 'verticals') return withMobile('verticals', { ...VERTICALS_DEFAULTS, ...l }, VERTICALS_MOBILE);
+  if (id === 'careers') return withMobile('careers', { ...CAREERS_DEFAULTS, ...l }, CAREERS_MOBILE);
+  if (id === 'footer') return withMobile('footer', { ...FOOTER_DEFAULTS, ...l }, FOOTER_MOBILE);
   // Open road. The hero's colour moved from Traffic to Open road: keep one saved there.
   const t = layer('traffic');
   return withMobile('open-road', {
@@ -188,9 +194,9 @@ const page = compose('page');
 applyPage(effective(page));
 const grain = createGrain(effective(page));
 
-const config = { openRoad: compose('open-road'), traffic: compose('traffic'), platform: compose('platform') };
+const config = { openRoad: compose('open-road'), traffic: compose('traffic'), platform: compose('platform'), verticals: compose('verticals'), careers: compose('careers'), footer: compose('footer') };
 // Authored settings by id — what the inspector edits and Save as default saves.
-const authored = { page, 'open-road': config.openRoad, traffic: config.traffic, platform: config.platform };
+const authored = { page, 'open-road': config.openRoad, traffic: config.traffic, platform: config.platform, verticals: config.verticals, careers: config.careers, footer: config.footer };
 
 /* ---------- the sequence ----------
    Every beat hands over to the next unless it says `seam: false`. The handover
@@ -222,6 +228,31 @@ const director = createDirector({
       // and takes that dot into the dark.
       length: effective(config.platform).length, join: true, seam: false,
       create: createPlatform, config: effective(config.platform),
+    },
+    {
+      id: 'verticals', name: 'Platform verticals',
+      // Cover: rises from the bottom over the platform's last frame (the
+      // white dot), which holds still underneath; once the dot is covered,
+      // it becomes the cursor.
+      // Flow: then it scrolls like a page, `height` screens tall.
+      length: effective(config.verticals).height, cover: true, flow: true, seam: false,
+      create: createVerticals, config: effective(config.verticals),
+    },
+    {
+      id: 'careers', name: 'Investors and careers',
+      // Arrives as a pixel band (its top edge, hanging over the end of
+      // Platform verticals) and scrolls like a page. Lead: its progress runs
+      // from its top entering the screen, so the band can fill in on the way.
+      length: effective(config.careers).height, lead: true, flow: true, seam: false,
+      create: createCareers, config: effective(config.careers),
+    },
+    {
+      id: 'footer', name: 'Footer',
+      // Revealed from underneath: Investors and careers scrolls away over it
+      // while its content follows more slowly (parallax). Lead + flow: its
+      // progress runs from its top entering the screen to the page's end.
+      length: effective(config.footer).height, lead: true, flow: true, seam: false,
+      create: createFooter, config: effective(config.footer),
     },
   ],
 });

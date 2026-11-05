@@ -38,6 +38,19 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
     // other — for when the next beat has to continue *exactly* where the last
     // one stopped. The joined beat is handed the previous beat's api (`join`).
     if (def.join) section.classList.add('beat--join');
+    // `cover`: this section rises over the previous beat's last screen, in
+    // view the whole way (unlike `join`), while that beat holds its final
+    // frame underneath. The previous section gets one extra screen for it and
+    // reaches p=1 a screen early, the moment this one starts to enter — so its
+    // own pacing doesn't change. The covering beat is handed the previous
+    // beat's api (`cover`).
+    const coverNext = beats[beats.indexOf(def) + 1]?.cover;
+    if (def.cover) section.classList.add('beat--cover');
+    // `flow`: no sticky stage — the section scrolls like a page, its stage
+    // the whole section. Its progress still runs `top bottom` (with `cover`
+    // or `lead`) → `bottom bottom`.
+    if (def.flow) section.classList.add('beat--flow');
+    if (coverNext) section.classList.add('beat--covered');
 
     const stage = document.createElement('div');
     stage.className = 'beat__stage';
@@ -67,8 +80,8 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
 
     entry.trigger = ScrollTrigger.create({
       trigger: section,
-      start: def.lead ? 'top bottom' : 'top top',
-      end: 'bottom bottom',
+      start: def.lead || def.cover ? 'top bottom' : 'top top',
+      end: coverNext ? () => `bottom-=${stageHeight()} bottom` : 'bottom bottom',
       invalidateOnRefresh: true,
       onUpdate: (self) => api.seek(self.progress),
       onToggle: showJoined,
@@ -94,6 +107,10 @@ export function createDirector({ root, handoffLayer, beats, deps }) {
   });
 
   mounted.forEach((m, i) => {
+    if (m.def.cover && i > 0) m.api.cover?.(mounted[i - 1].api);
+    // Every beat may want to know what follows it (Platform verticals hands
+    // its dot cursor back where the next section's pixel band is).
+    if (i < mounted.length - 1) m.api.followedBy?.(mounted[i + 1].api);
     if (!m.def.join || i === 0) return;
     m.api.join?.(mounted[i - 1].api);
     mounted[i - 1].api.joinedBy?.(m.api);
