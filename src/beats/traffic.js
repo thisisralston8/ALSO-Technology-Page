@@ -28,6 +28,7 @@
 import { createTrail, TRAIL_DEFAULTS } from '../trail.js';
 import { paintCover } from '../cover.js';
 import { createLineReveal, revealAtTop } from '../lineReveal.js';
+import { createColorWave, letters, WAVE_DEFAULTS } from '../colorWave.js';
 import { span as gridSpan, gridOptions } from '../grid.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -121,6 +122,10 @@ export function createTraffic(el, config) {
   el.append(view, hero, fillEl, nightDot);
   trail.add(hero, { mode: 'canvasFill', source: heroPaint });
 
+  // "Start small" colour wave (colorWave.js): plays once, on time, the
+  // first time it comes on screen.
+  const wave = createColorWave(head);
+
   /* ---------- layout ---------- */
 
   const geo = {
@@ -153,12 +158,13 @@ export function createTraffic(el, config) {
     });
 
     // "Start ▣ small": the ▣ is the gap the hero docks in.
+    // One span per letter, for the colour wave.
     head.textContent = '';
     const [a, ...rest] = String(cfg.startText).split(SLOT);
-    head.append(document.createTextNode(a));
+    letters(head, a);
     const slot = document.createElement('span');
     slot.className = 'traf__slot';
-    if (rest.length) { head.append(slot, document.createTextNode(rest.join(SLOT))); }
+    if (rest.length) { head.append(slot); letters(head, rest.join(SLOT)); }
     Object.assign(head.style, {
       fontSize: `${cfg.startSize * W}px`,
       letterSpacing: `${cfg.startTracking}em`,
@@ -224,6 +230,7 @@ export function createTraffic(el, config) {
     geo.end = Math.max(geo.arrive, geo.nightTop);
     blurbReveals.forEach((r) => r.split());
     headReveal.split();
+    wave.remeasure();   // the letters were rebuilt: measure them again
     // Measured after the split, from the text as it's drawn: the line reveal
     // re-wraps it (SplitText breaks lines plainly, not balanced like the CSS
     // does), so its lines can reach further than the unsplit text's.
@@ -560,6 +567,7 @@ export function createTraffic(el, config) {
     // Line reveals: each text's lines rise in as it comes up the screen.
     blurbReveals.forEach((r, i) => r.set(revealAtTop(geo.blurbTops[i] - off + stageTop, H)));
     headReveal.set(revealAtTop(geo.headTop - off + stageTop + lag, H));
+    wave.update(geo.headTop - off + stageTop + lag, H, cfg);
 
     const h = heroAt(s);
     const hcx = h.r.x + h.r.w / 2, hcy = h.r.y + h.r.h / 2 + s;   // page coords
@@ -673,6 +681,8 @@ export function createTraffic(el, config) {
   /* ---------- api ---------- */
 
   function setConfig(next) {
+    // A changed wave setting plays the wave again (when it's next on screen).
+    wave.configure(cfg, next);
     cfg = next;
     trail.setOptions(cfg);
     computeGeometry();
@@ -716,7 +726,7 @@ export function createTraffic(el, config) {
     // The element that carries the hero in this beat (for the director, so it
     // can clear its echoes when the hero changes hands).
     trailTarget: () => hero,
-    destroy() { blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
+    destroy() { blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); wave.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
     get config() { return cfg; },
   };
 }
@@ -746,6 +756,9 @@ export const TRAFFIC_DEFAULTS = {
   startY: 0.5,             // where it stops on screen (its middle), × screen height
   slotWidth: 70,           // px: the gap the dot docks in
   slotLift: -0.06,         // the dot's height in the gap, × type size (negative raises it)
+
+  // "Start small" colour wave (colorWave.js)
+  ...WAVE_DEFAULTS,
 
   // Hero
   heroPath: 'centre',      // 'centre': held dead centre all the way | 'lane': rides a lane round the text

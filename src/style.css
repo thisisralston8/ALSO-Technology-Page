@@ -234,6 +234,7 @@ body {
   line-height: 0.9;
   white-space: nowrap;
 }
+.cw-word { white-space: nowrap; }
 .traf__slot { display: inline-block; height: 1px; vertical-align: middle; }
 .traf__fill { position: absolute; top: 0; left: 0; z-index: 3; will-change: transform; }
 .traf__nightdot { z-index: 4; }
@@ -549,16 +550,56 @@ html.is-wireframe .traf__car.is-photo {
 }
 .xm__title, .xm__ghost { font-weight: 400; line-height: 0.92; letter-spacing: -0.052em; }
 .xm__title { margin: 0; text-align: left; white-space: nowrap; }
-.xm__x {
+/* The floating controls: the layer switcher and the close button, side by
+   side at the bottom centre (Figma → Brand Campaign → Control placement). */
+.xm__ctrl {
   position: absolute;
   left: 50%;
   z-index: 3;   /* above the scroll layer and everything in it */
+  display: flex; align-items: center;
+  max-width: calc(100vw - 16px);
+}
+.xm__x {
+  flex: none;
+  box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
   padding: 0;
-  border: 0; border-radius: 50%;
+  border-radius: 50%;
   cursor: pointer;
   --xm-icon: 18px;
 }
+.xm__seg {
+  position: relative;
+  box-sizing: border-box;
+  display: flex; align-items: center;
+  border-radius: 999px;
+  min-width: 0;
+}
+.xm__pill {
+  position: absolute; top: 0; left: 0;
+  box-sizing: border-box;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.xm__segbtn {
+  position: relative;   /* over the pill */
+  box-sizing: border-box;
+  height: var(--seg-h, 40px);
+  min-width: var(--seg-min, 128px);
+  padding: 0 var(--seg-px, 24px);
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 999px;
+  background: none;
+  color: var(--seg-ink, #0b0b0b);
+  font: 900 var(--seg-font, 16px)/1.5 'Serial C', ui-monospace, monospace;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .2s;
+}
+.xm__segbtn.is-on { color: var(--seg-on-ink, #0b0b0b); cursor: default; }
+.xm__segbtn:not(.is-on):hover { opacity: .6; }
+.xm__segbtn:focus-visible { outline: 2px solid currentColor; outline-offset: -4px; }
 .xm__x svg { display: block; width: var(--xm-icon); height: var(--xm-icon); }
 .xm__x:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 /* The content, after the Figma frames (Brand Campaign → Hardware / Software

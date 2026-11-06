@@ -27,6 +27,7 @@
 
 import { span as gridSpan, gridOptions } from '../grid.js';
 import { createLineReveal, revealAtTop, revealOptions } from '../lineReveal.js';
+import { createColorWave, letters, WAVE_DEFAULTS } from '../colorWave.js';
 import logoSvg from '../assets/footer/also-logo.svg?raw';
 import arrowUrl from '../assets/footer/arrow-right.svg?url';
 
@@ -52,6 +53,11 @@ export const FOOTER_DEFAULTS = {
   headline: 'Join us in building the future of transportation.',
   headCol: 1, headSpan: 3,
   headSize: 32, headLeading: 36, headTracking: -1.5,
+  // The headline's colour wave (colorWave.js)
+  ...WAVE_DEFAULTS,
+  waveFrom: '#3a3a3a',
+  waveTo: '#ffffff',
+  waveTrigger: 0.9,
   buttonGap: 24,           // px, headline to the button
   button: 'Careers',
   buttonHref: '#',
@@ -134,6 +140,7 @@ export function createFooter(el, config) {
   intro.className = 'foot__intro';
   const head = document.createElement('p');
   head.className = 'foot__head';
+  const wave = createColorWave(head);
   const button = document.createElement('a');
   button.className = 'foot__btn';
   const buttonLabel = document.createElement('span');
@@ -229,7 +236,8 @@ export function createFooter(el, config) {
 
     const h = gridSpan(W, cfg.headCol, cfg.headSpan);
     Object.assign(intro.style, { left: `${h.x}px`, width: `${h.w}px`, top: `${cfg.padTop}px`, gap: `${cfg.buttonGap}px` });
-    head.textContent = cfg.headline;
+    head.textContent = '';
+    letters(head, cfg.headline);
     Object.assign(head.style, { fontSize: `${cfg.headSize}px`, lineHeight: `${cfg.headLeading}px`, letterSpacing: `${cfg.headTracking}px` });
     buttonLabel.textContent = cfg.button;
     button.href = cfg.buttonHref || '#';
@@ -270,6 +278,7 @@ export function createFooter(el, config) {
     reveals.forEach((x) => { x.off = x.e.getBoundingClientRect().top - base; });
     logoState.off = logoMask.getBoundingClientRect().top - base;
     reveals.forEach((x) => x.r.split());
+    wave.remeasure();
     render();
   }
 
@@ -301,6 +310,9 @@ export function createFooter(el, config) {
     const top = edge + lag;
     const at = (off) => (top + off >= edge ? revealAtTop(top + off, Hs) : 0);
     reveals.forEach((x) => x.r.set(at(x.off)));
+    // The headline's colour wave: starts once it's uncovered and up the screen.
+    const hOff = fixed[0].off;
+    wave.update(top + hOff >= edge ? top + hOff : Infinity, Hs, cfg);
     // The wordmark: rises from behind its own bottom edge.
     const o = revealOptions();
     const q = at(logoState.off);
@@ -474,7 +486,7 @@ export function createFooter(el, config) {
 
   return {
     seek(p) { progress = p; render(); },
-    setConfig(next) { cfg = next; layout(); },
+    setConfig(next) { wave.configure(cfg, next); cfg = next; layout(); },
     relayout() { layout(); },
     naturalLength() { return Math.max(0.3, cfg.height); },
     destroy() {
@@ -482,6 +494,7 @@ export function createFooter(el, config) {
       ['pointermove', 'pointerdown', 'pointerup', 'pointercancel'].forEach((t) => removeEventListener(t, onFieldPointer));
       document.removeEventListener('pointerout', onFieldOut);
       reveals.forEach((x) => x.r.destroy());
+      wave.destroy();
       el.classList.remove('foot');
       content.remove(); shade.remove();
     },

@@ -735,11 +735,31 @@ export const PLATFORM_DEFAULTS = {
 
   // The close button, floating at the bottom centre of the screen.
   modalCloseSize: 56,      // px across
-  modalCloseIconSize: 0.4, // × the button
+  modalCloseIconSize: 0.43, // × the button (Figma: 24 of 56)
   modalCloseBottom: 32,    // px up from the bottom of the screen
   modalCloseBg: '#ffffff',
   modalCloseInk: '#0b0b0b',
-  modalCloseIcon: '',      // uploaded SVG markup; empty for a plain ×
+  modalCloseIcon: '',      // uploaded SVG markup; empty for Figma's ×
+  modalCtrlBorder: '#0b0b0b',   // the outline round the close button, the switcher and its pill
+  modalCtrlBorderWidth: 1,      // px
+  // The layer switcher beside it: one segment per layer (Figma → Segmented Control).
+  modalSeg: 'on',          // 'on' | 'off'
+  modalSegGap: 16,         // px between the switcher and the close button
+  modalSegPad: 8,          // px round the segments, inside the bar
+  modalSegHeight: 40,      // px, each segment
+  modalSegMinWidth: 128,   // px, each segment at least
+  modalSegPadX: 24,        // px either side of a label
+  modalSegFont: 16,        // px
+  modalSegBg: '#ffffff',
+  modalSegInk: '#0b0b0b',
+  modalSegActive: '#ac74fc',       // the pill
+  modalSegActiveInk: '#0b0b0b',
+  modalSegShadow: 2,               // px, the pill's hard shadow below it
+  modalSegShadowColour: '#48316a',
+  modalSegSlide: 0.45,     // s the pill takes to slide to a new layer
+  modalSegEase: 'power3.inOut',
+  modalJumpOut: 0.2,       // s, tapping a segment: the content fades out…
+  modalJumpIn: 0.35,       // …and back in on the new layer
   modalDim: 0.6,           // backdrop darkness, 0–1
   modalBlur: 12,           // px
   modalCol: 3,             // the card on the layout grid: first column…
@@ -824,6 +844,7 @@ export const PLATFORM_DEFAULTS = {
    grid, and the platform centred below it. */
 export const PLATFORM_MOBILE = {
   modalCol: 1, modalSpan: 4, modalMargin: 24, modalTitleSize: 44, modalCloseSize: 48, modalCloseBottom: 20,
+  modalSegGap: 8, modalSegPad: 4, modalSegHeight: 40, modalSegMinWidth: 0, modalSegPadX: 10, modalSegFont: 13,
   ...MODAL_CONTENT_MOBILE,
   heroSize: 28,
   heroCol: 1, heroSpan: 4,

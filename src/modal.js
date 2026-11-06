@@ -34,6 +34,7 @@
 
 import { span as gridSpan } from './grid.js';
 import { cleanSvg } from './svgIcon.js';
+import closeSvg from './assets/ui/close.svg?raw';
 import { MODAL_LAYERS, MODAL_SLOTS, mediaKey, ratioKey, focusXKey, focusYKey } from './modalContent.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -50,13 +51,20 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
       <div class="xm__stack"></div>
       <div class="xm__end" aria-hidden="true"></div>
     </div>
-    <button class="xm__x" type="button" aria-label="Close"></button>
+    <div class="xm__ctrl">
+      <div class="xm__seg" role="group" aria-label="Go to layer"><span class="xm__pill" aria-hidden="true"></span></div>
+      <button class="xm__x" type="button" aria-label="Close"></button>
+    </div>
     <h2 class="xm__ghost" aria-hidden="true"></h2>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const backdrop = $('.xm__backdrop'), surface = $('.xm__surface'), scroller = $('.xm__scroll');
   const stack = $('.xm__stack'), end = $('.xm__end'), ghost = $('.xm__ghost');
   const closeBtn = $('.xm__x');
+  const ctrl = $('.xm__ctrl'), seg = $('.xm__seg'), pill = $('.xm__pill');
+  let segBtns = [];
+  let pillAt = -1;        // the segment the pill is on (or heading to)
+  let jumping = null;     // the quick cut between layers, while it plays
 
   let tl = null;
   let closing = false;
@@ -194,21 +202,36 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     return { x: r.left, y: top, w: r.width, h: Math.max(0, bottom - top) };
   };
 
-  /* ---------- the floating close button ----------
-     Fixed at the bottom centre, above everything in the modal. Its icon is
-     the uploaded SVG (`modalCloseIcon`, markup kept in the settings) or a
-     plain ×. The icon is recoloured to `modalCloseInk`: its fills and
-     strokes are switched to currentColor (see svgIcon.js). */
+  /* ---------- the floating controls ----------
+     Fixed at the bottom centre, above everything in the modal: the layer
+     switcher (a segmented control, after Figma → Brand Campaign → Segmented
+     Control) and the close button beside it.
 
-  const DEFAULT_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+     The switcher has one segment per layer. A purple pill marks the layer
+     being read and slides to the new one whenever that changes — by
+     tapping a segment or by reading on. Tapping one is a quick cut: the
+     content fades out, the modal jumps to that layer's card, and it fades
+     back in (the platform behind follows, as when reading on).
+
+     The close button's icon is the uploaded SVG (`modalCloseIcon`, markup
+     kept in the settings) or Figma's ×. It's recoloured to `modalCloseInk`:
+     its fills and strokes are switched to currentColor (see svgIcon.js). */
+
+  const DEFAULT_X = cleanSvg(closeSvg);
   let iconKey = null;
   function styleCloseButton() {
     const size = cfg.modalCloseSize;
+    const bw = cfg.modalCtrlBorderWidth;
+    Object.assign(ctrl.style, {
+      bottom: `${cfg.modalCloseBottom}px`,
+      gap: `${cfg.modalSegGap}px`,
+    });
     Object.assign(closeBtn.style, {
       width: `${size}px`, height: `${size}px`,
-      bottom: `${cfg.modalCloseBottom}px`,
       background: cfg.modalCloseBg, color: cfg.modalCloseInk,
+      border: `${bw}px solid ${cfg.modalCtrlBorder}`,
     });
+    styleSegments();
     closeBtn.style.setProperty('--xm-icon', `${Math.round(size * cfg.modalCloseIconSize)}px`);
     const svg = cfg.modalCloseIcon || '';
     if (svg !== iconKey) {
@@ -219,13 +242,94 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     }
   }
 
+  // One segment per card, labelled with its title.
+  function buildSegments() {
+    segBtns.forEach((b) => b.remove());
+    segBtns = cards.map((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'xm__segbtn';
+      b.textContent = c.title.textContent.trim();
+      b.addEventListener('click', () => jumpTo(i));
+      seg.appendChild(b);
+      return b;
+    });
+    pillAt = -1;
+  }
+
+  function styleSegments() {
+    const on = cfg.modalSeg === 'on';
+    seg.style.display = on ? '' : 'none';
+    if (!on) return;
+    const bw = cfg.modalCtrlBorderWidth;
+    Object.assign(seg.style, {
+      // Figma draws the outline inside the padding.
+      padding: `${Math.max(0, cfg.modalSegPad - bw)}px`,
+      background: cfg.modalSegBg,
+      border: `${bw}px solid ${cfg.modalCtrlBorder}`,
+    });
+    seg.style.setProperty('--seg-h', `${cfg.modalSegHeight}px`);
+    seg.style.setProperty('--seg-min', `${cfg.modalSegMinWidth}px`);
+    seg.style.setProperty('--seg-px', `${cfg.modalSegPadX}px`);
+    seg.style.setProperty('--seg-font', `${cfg.modalSegFont}px`);
+    seg.style.setProperty('--seg-ink', cfg.modalSegInk);
+    seg.style.setProperty('--seg-on-ink', cfg.modalSegActiveInk);
+    Object.assign(pill.style, {
+      background: cfg.modalSegActive,
+      border: `${bw}px solid ${cfg.modalCtrlBorder}`,
+      filter: cfg.modalSegShadow > 0 ? `drop-shadow(0 ${cfg.modalSegShadow}px 0 ${cfg.modalSegShadowColour})` : '',
+    });
+    placePill(active, false);
+  }
+
+  // The pill onto segment i: slid there over `modalSegSlide`, or set.
+  function placePill(i, animate) {
+    const b = segBtns[i];
+    if (!b || cfg.modalSeg !== 'on') return;
+    segBtns.forEach((x, k) => {
+      x.classList.toggle('is-on', k === i);
+      x.setAttribute('aria-current', k === i ? 'true' : 'false');
+    });
+    const to = { x: b.offsetLeft, width: b.offsetWidth, height: b.offsetHeight, y: b.offsetTop };
+    if (animate && pillAt !== -1 && pillAt !== i && cfg.modalSegSlide > 0) {
+      gsap.to(pill, { ...to, duration: cfg.modalSegSlide, ease: cfg.modalSegEase, overwrite: true });
+    } else {
+      gsap.killTweensOf(pill);
+      gsap.set(pill, to);
+    }
+    pillAt = i;
+  }
+
+  // Tap a segment: a quick cut to that layer's card. The content fades out,
+  // the modal jumps (every card straight to where the new scroll says) and
+  // fades back in.
+  function jumpTo(i) {
+    if (!tl || closing || !cards[i]) return;
+    if (i === active && !jumping) {
+      // Already on it: back to its top, if it's been scrolled.
+      if (Math.abs(scroller.scrollTop - (cards[i].top - metrics.M)) < 2) return;
+    }
+    placePill(i, true);
+    jumping?.kill();
+    const out = cfg.modalJumpOut, inn = cfg.modalJumpIn;
+    jumping = gsap.timeline({ onComplete: () => { jumping = null; } })
+      .to(stack, { opacity: 0, duration: out, ease: 'power1.in' })
+      .add(() => {
+        scroller.scrollTop = cards[i].top - metrics.M;
+        update();
+        cascades(false);
+      })
+      .to(stack, { opacity: 1, duration: inn, ease: 'power2.out' });
+  }
+
   function layout() {
     const H = innerHeight, M = cfg.modalMargin;
     const box = gridSpan(innerWidth, cfg.modalCol, cfg.modalSpan);
     const pad = cfg.modalPad ?? 0;
     // Room under the last of the content for the close button, where it
     // floats over the card (when the margin below the card is less than it).
-    const padBottom = Math.max(pad, cfg.modalCloseBottom + cfg.modalCloseSize + 16 - M);
+    const ctrlH = Math.max(cfg.modalCloseSize, cfg.modalSeg === 'on' ? cfg.modalSegHeight + 2 * Math.max(cfg.modalSegPad, cfg.modalCtrlBorderWidth) : 0);
+    const padBottom = Math.max(pad, cfg.modalCloseBottom + ctrlH + 16 - M);
     root.style.setProperty('--xm-media-r', `${cfg.modalMediaRadius ?? 16}px`);
     fillSlots();
     cards.forEach((c, i) => {
@@ -378,6 +482,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     layers[active]?.block.classList.remove('xm-origin');
     active = i;
     layers[active].block.classList.add('xm-origin');
+    if (!jumping) placePill(active, true);
     onLayer(active + 1, cfg);
   }
 
@@ -390,6 +495,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     active = n - 1;
     closing = false;
     build();
+    buildSegments();
     root.hidden = false;
     layout();
     // Straight to this layer's card, with its top at the top margin.
@@ -423,7 +529,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     gsap.set(backdrop, { opacity: 0 });
     const parts = [card.num, ...partsOf(card)];
     gsap.set(parts, { opacity: 0, y: cfg.modalContentRise, filter: blur(cfg.modalBlurIn) });
-    gsap.set(closeBtn, { opacity: 0, y: cfg.modalContentRise, xPercent: -50 });
+    gsap.set(ctrl, { opacity: 0, y: cfg.modalContentRise, xPercent: -50 });
 
     const D = cfg.modalDuration, ease = cfg.modalEase;
     tl = gsap.timeline({ onComplete: () => closeBtn.focus({ preventScroll: true }) });
@@ -443,8 +549,8 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
         stagger: cfg.modalStagger,
         onComplete() { gsap.set(parts, { filter: 'none' }); },
       }, D + cfg.modalContentDelay)
-      // The close button rises in with the content.
-      .to(closeBtn, { opacity: 1, y: 0, duration: cfg.modalContentFade, ease: 'power3.out' }, D + cfg.modalContentDelay);
+      // The controls rise in with the content.
+      .to(ctrl, { opacity: 1, y: 0, duration: cfg.modalContentFade, ease: 'power3.out' }, D + cfg.modalContentDelay);
   }
 
   /* Closing is the opening in reverse — same path, same ease mirrored in
@@ -474,7 +580,8 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     const inPlace = landed && (t1.top < 0 || t1.bottom > innerHeight);
 
     tl = gsap.timeline({ onComplete: finish });
-    tl.to(closeBtn, { opacity: 0, y: cfg.modalContentRise, duration: Math.max(0.12, fade), ease: 'power1.in' }, 0);
+    jumping?.kill(); jumping = null;
+    tl.to(ctrl, { opacity: 0, y: cfg.modalContentRise, duration: Math.max(0.12, fade), ease: 'power1.in' }, 0);
     if (landed) {
       tl.to(stack, { opacity: 0, duration: fade, ease: 'power1.in' }, 0);
       // The surface and ghost headline take over from the card where it is.
@@ -507,6 +614,8 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     root.hidden = true;
     stack.style.visibility = '';
     stack.style.opacity = '';
+    gsap.killTweensOf(pill);
+    pillAt = -1;
     const l = layers[active];
     if (l) {
       l.heading.classList.remove('xm-reveal');
@@ -525,9 +634,14 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   scroller.addEventListener('click', (e) => { if (!e.target.closest('.xm__card')) close(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && tl) close(); });
   closeBtn.addEventListener('click', close);
-  // Keep focus inside while open: the close button is the only control yet.
+  // Keep focus inside while open: Tab cycles through the controls.
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab' && tl) { e.preventDefault(); closeBtn.focus(); }
+    if (e.key !== 'Tab' || !tl) return;
+    e.preventDefault();
+    const items = [...(cfg?.modalSeg === 'on' ? segBtns : []), closeBtn];
+    const k = items.indexOf(document.activeElement);
+    const next = k === -1 ? items.length - 1 : (k + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+    items[next].focus();
   });
   addEventListener('resize', () => {
     if (!tl || closing) return;

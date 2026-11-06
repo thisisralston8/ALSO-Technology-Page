@@ -9,6 +9,7 @@
    its settings under `params.*`, matching the upstream model). Add a control by
    adding an entry here — never by writing DOM by hand. */
 
+import { waveRows } from '../colorWave.js';
 import { MODAL_LAYERS, MODAL_SLOTS, RATIOS, mediaKey, ratioKey, focusXKey, focusYKey } from '../modalContent.js';
 
 /* The Explore modal's content: a group per layer, and under it each image
@@ -163,6 +164,7 @@ export const SCHEMA = {
     { p: 'startTracking', label: 'Tracking', min: -0.12, max: 0.05, step: 0.001, unit: 'em' },
     { p: 'startGap', label: 'Below the last line', min: 0.3, max: 3, step: 0.01 },
     { p: 'slotWidth', label: 'Gap width', min: 10, max: 300, step: 1, unit: 'px' },
+    ...waveRows('Start small: colour wave'),
 
     { part: 'Traffic' },
     { group: 'Shape along the way', note: 'Measured along the way to “Start small”: 0 = top of this section, 1 = the gap.' },
@@ -268,6 +270,7 @@ export const SCHEMA = {
     { p: 'buttonBg', label: 'Fill', type: 'color' },
     { p: 'buttonInk', label: 'Text and border', type: 'color' },
     { p: 'buttonShadow', label: 'Shadow', type: 'color' },
+    ...waveRows('Headline: colour wave', 'The headline, letter by letter, from one colour through a second to a third. Plays once, after it’s uncovered and reaches “Starts at”; changing a setting here plays it again.'),
     { group: 'Link columns' },
     { p: 'col1Title', label: 'Column 1 title', type: 'textarea' },
     { p: 'col1Items', label: 'Column 1 links', type: 'textlist', addLabel: 'Add link' },
@@ -619,13 +622,36 @@ export const SCHEMA = {
     { p: 'modalBlurIn', label: 'Blur as it arrives', min: 0, max: 30, step: 0.5, unit: 'px', hint: 'Content comes into focus as it fades in; also on open' },
     { sub: 'The platform' },
     { p: 'modalFollow', label: 'Platform follows over', min: 0.2, max: 3, step: 0.05, unit: ' s', hint: 'The section behind moves to the layer being read' },
-    { group: 'Close button', note: 'Floats over the modal at the bottom of the screen.' },
+    { group: 'Layer switcher', note: 'Beside the close button: one segment per layer. The pill slides to the layer being read; tapping a segment cuts straight to that layer.' },
+    { p: 'modalSeg', label: 'Switcher', type: 'seg', options: [['on', 'On'], ['off', 'Off']] },
+    { sub: 'Shape', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegGap', label: 'Gap to close button', min: 0, max: 64, step: 1, unit: 'px', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegPad', label: 'Padding', min: 0, max: 24, step: 1, unit: 'px', hint: 'Round the segments, inside the bar', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegHeight', label: 'Segment height', min: 24, max: 80, step: 1, unit: 'px', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegMinWidth', label: 'Segment min width', min: 0, max: 240, step: 1, unit: 'px', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegPadX', label: 'Label padding', min: 0, max: 48, step: 1, unit: 'px', hint: 'Either side of each label', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegFont', label: 'Label size', min: 9, max: 24, step: 0.5, unit: 'px', when: (c) => c.modalSeg === 'on' },
+    { sub: 'Colours', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegBg', label: 'Bar', type: 'color', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegInk', label: 'Labels', type: 'color', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegActive', label: 'Pill', type: 'color', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegActiveInk', label: 'Pill label', type: 'color', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegShadow', label: 'Pill shadow', min: 0, max: 8, step: 0.5, unit: 'px', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegShadowColour', label: 'Pill shadow colour', type: 'color', when: (c) => c.modalSeg === 'on' && c.modalSegShadow > 0 },
+    { sub: 'Motion', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegSlide', label: 'Pill slides over', min: 0, max: 1.5, step: 0.05, unit: ' s', hint: '0 = it jumps', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalSegEase', label: 'Pill ease', type: 'seg', options: [['power2.out', 'Soft'], ['power3.inOut', 'In & out'], ['expo.out', 'Snappy'], ['back.out(1.6)', 'Overshoot']], when: (c) => c.modalSeg === 'on' },
+    { p: 'modalJumpOut', label: 'Tap: content fades out over', min: 0, max: 1, step: 0.05, unit: ' s', when: (c) => c.modalSeg === 'on' },
+    { p: 'modalJumpIn', label: 'Tap: fades back in over', min: 0, max: 1.5, step: 0.05, unit: ' s', when: (c) => c.modalSeg === 'on' },
+    { group: 'Close button', note: 'Floats over the modal at the bottom of the screen, beside the layer switcher.' },
     { p: 'modalCloseIcon', label: 'Icon', type: 'svg', hint: 'An SVG file. Its colours are replaced by Icon colour' },
     { p: 'modalCloseSize', label: 'Size', min: 24, max: 120, step: 1, unit: 'px' },
     { p: 'modalCloseIconSize', label: 'Icon size', min: 0.1, max: 1, step: 0.01, unit: '×', hint: 'Of the button' },
     { p: 'modalCloseBottom', label: 'From the bottom', min: 0, max: 200, step: 1, unit: 'px' },
     { p: 'modalCloseBg', label: 'Background', type: 'color' },
     { p: 'modalCloseInk', label: 'Icon colour', type: 'color' },
+    { p: 'modalCtrlBorder', label: 'Outline', type: 'color', hint: 'Also round the layer switcher and its pill' },
+    { p: 'modalCtrlBorderWidth', label: 'Outline width', min: 0, max: 4, step: 0.5, unit: 'px' },
     { group: 'Background' },
     { p: 'modalDim', label: 'Dim', min: 0, max: 1, step: 0.01 },
     { p: 'modalBlur', label: 'Blur', min: 0, max: 40, step: 1, unit: 'px' },
