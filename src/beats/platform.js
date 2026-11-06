@@ -235,7 +235,7 @@ export function createPlatform(el, config) {
 
   let loading = null;
   function loadGL() {
-    if (!loading) loading = import('three').then((T) => { initGL(T); render(progress); });
+    if (!loading) loading = import('../three.js').then((T) => { initGL(T); render(progress); });
     return loading;
   }
   // Start the download once the page has settled, so it's ready long before

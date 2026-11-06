@@ -9,7 +9,8 @@
     "dev:phone": "vite --port 4860 --host",
     "optimize": "node scripts/optimize-media.mjs",
     "build": "vite build",
-    "preview": "vite preview --port 4860"
+    "preview": "vite preview --port 4860",
+    "build:site": "VITE_EDITOR=off vite build"
   },
   "dependencies": {
     "gsap": "^3.15.0",

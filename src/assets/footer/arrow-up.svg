@@ -1,5 +1,5 @@
 <svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Icons/Arrows/Right">
-<path id="Vector" d="M13 18L19 12L13 6M18.5 12H5" stroke-width="2" stroke-linecap="square" stroke="#0B0B0B"/>
+<g id="Icons/Arrows">
+<path id="Vector" d="M18 11L12 5L6 11M12 5.5V19" stroke-width="2" stroke-linecap="square" stroke="#0B0B0B"/>
 </g>
 </svg>

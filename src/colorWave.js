@@ -32,6 +32,9 @@ export const WAVE_DEFAULTS = {
 };
 export const WAVE_KEYS = Object.keys(WAVE_DEFAULTS);
 
+// With reduced motion the text goes straight to its end colour when it would
+// have started the wave.
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const frac = (x) => x - Math.floor(x);
 const rnd = (i, k) => frac(Math.sin(i * 127.1 + k * 311.7) * 43758.5453);
 const hexRgb = (h) => {
@@ -69,6 +72,9 @@ export function letters(el, text) {
 export function createColorWave(el) {
   let cfg = WAVE_DEFAULTS;
   let t0 = null, raf = 0, chars = null;
+  // The settings the text was last painted at rest (before or after the
+  // wave) with: while nothing changes, scrolling doesn't repaint it.
+  let restFor = null;
 
   // Each letter's place along the text, 0–1, in reading order: line by line,
   // and by its actual position across each line (so gaps count as distance).
@@ -103,7 +109,7 @@ export function createColorWave(el) {
     const from = hexRgb(cfg.waveFrom), mid = hexRgb(cfg.waveColour), to = hexRgb(cfg.waveTo);
     const ease = EASE[cfg.waveEase] || EASE.smooth;
     const peak = Math.min(0.95, Math.max(0.05, cfg.wavePeak));
-    const t = t0 == null ? -Infinity : (now - t0) / 1000 - cfg.waveDelay;
+    const t = t0 == null ? -Infinity : reduced.matches ? Infinity : (now - t0) / 1000 - cfg.waveDelay;
     for (const c of chars) {
       let col = '';
       if (on) {
@@ -125,21 +131,27 @@ export function createColorWave(el) {
     raf = 0;
     const now = performance.now();
     paint(now);
-    if (t0 != null && (now - t0) / 1000 < total() + 0.05) raf = requestAnimationFrame(tick);
+    if (t0 != null && !reduced.matches && (now - t0) / 1000 < total() + 0.05) raf = requestAnimationFrame(tick);
   }
 
   return {
-    remeasure() { chars = null; },
+    remeasure() { chars = null; restFor = null; },
     update(top, H, next) {
       cfg = next;
       if (cfg.wave === 'on' && t0 == null && top <= cfg.waveTrigger * H) {
         t0 = performance.now();
         if (!raf) raf = requestAnimationFrame(tick);
       }
-      if (!raf) paint(performance.now());
+      if (raf) return;
+      const now = performance.now();
+      const resting = t0 == null || reduced.matches || (now - t0) / 1000 >= total() + 0.05;
+      if (resting && restFor === cfg && chars?.[0]?.e.isConnected !== false) return;
+      paint(now);
+      restFor = resting ? cfg : null;
     },
     configure(prev, next) {
       if (WAVE_KEYS.some((k) => next[k] !== prev[k])) t0 = null;
+      restFor = null;
     },
     destroy() { cancelAnimationFrame(raf); },
   };

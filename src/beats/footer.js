@@ -10,10 +10,16 @@
 
    A shade over it fades away as it's uncovered, for depth.
 
-   Content after the Figma frame "Desktop - 119": top left, a headline and
-   the Careers button; two link columns; the ALSO. wordmark across the
-   grid, sitting on the bottom row of small links. Text gets the page's line
-   reveal; the wordmark rises from behind its own edge the same way.
+   Content after the Figma frame "Desktop - 123" (13365:703): top left, a
+   large headline and the Careers button; the ALSO. wordmark bottom left on
+   the row of small links, and a back-to-top button bottom right. (Two link
+   columns from an earlier frame are still there, off by default.) Text gets
+   the page's line reveal; the wordmark rises from behind its own edge the
+   same way.
+
+   The back-to-top button doesn't scroll anything itself (beats never touch
+   scroll): it dispatches `page:top` and main.js makes the quick cut — fade
+   out, jump to the top, fade in — like the modal's layer switcher.
 
    The wordmark's full stop is a force field (`field*`): it's drawn as a grid
    of small squares that, at rest, make the solid dot. Hover near it and the
@@ -29,7 +35,7 @@ import { span as gridSpan, gridOptions } from '../grid.js';
 import { createLineReveal, revealAtTop, revealOptions } from '../lineReveal.js';
 import { createColorWave, letters, WAVE_DEFAULTS } from '../colorWave.js';
 import logoSvg from '../assets/footer/also-logo.svg?raw';
-import arrowUrl from '../assets/footer/arrow-right.svg?url';
+import arrowUpUrl from '../assets/footer/arrow-up.svg?url';
 
 // The wordmark's own proportions (Figma: 1363.719 × 324.404 in a 1360 box).
 const LOGO_W = 1363.719, LOGO_H = 324.404, LOGO_BOX = 1360;
@@ -51,8 +57,8 @@ export const FOOTER_DEFAULTS = {
   // Top left: headline and button
   padTop: 80,              // px, from the footer's top
   headline: 'Join us in building the future of transportation.',
-  headCol: 1, headSpan: 3,
-  headSize: 32, headLeading: 36, headTracking: -1.5,
+  headCol: 1, headSpan: 7,
+  headSize: 120, headLeading: 112, headTracking: -6,
   // The headline's colour wave (colorWave.js)
   ...WAVE_DEFAULTS,
   waveFrom: '#3a3a3a',
@@ -64,8 +70,13 @@ export const FOOTER_DEFAULTS = {
   buttonBg: '#AC74FC',
   buttonInk: '#0b0b0b',
   buttonShadow: '#48316a',
+  buttonHeight: 72,        // px (Figma: 72 tall, at least 160 wide, 32 px either side, 24/28 type)
+  buttonMinWidth: 160,
+  buttonPadX: 32,
+  buttonSize: 24, buttonLeading: 28,
 
-  // Link columns
+  // Link columns (not in the current Figma frame)
+  columns: 'off',
   colTop: 86,              // px, from the footer's top
   col1Col: 7, col2Col: 10, colSpan: 3,
   col1Nudge: -12,          // px: Figma sets column 1 at the screen's middle, 12 px left of column 7
@@ -82,10 +93,23 @@ export const FOOTER_DEFAULTS = {
   // Bottom: the wordmark and the small links
   logo: 'on',
   logoReveal: 'on',        // rises from behind its edge, like the line reveal
-  logoGap: 32,             // px, wordmark to the links below
-  legal: ['Media inquiries', 'Terms', 'Privacy', 'Supplier terms'],
+  logoWidth: 322,          // px (capped at the grid's width)
+  logoGap: 44,             // px, wordmark to the links below
+  legal: ['Investor inquiries', 'Media inquiries', 'Terms', 'Privacy'],
   legalBottom: 24,         // px, from the footer's bottom
   legalSize: 12, legalLeading: 16, legalTracking: 0,
+
+  // Back to top: a round button bottom right, level with the wordmark
+  top: 'on',
+  topSize: 72,             // px, the circle
+  topIconSize: 24,         // px
+  topGap: 41,              // px, the button to the links below
+  topBg: '#ffffff',
+  topInk: '#0b0b0b',       // the outline (the arrow is the Figma icon)
+  topShadow: '#48316a',
+  topCutOut: 0.3,          // s, the page fading out
+  topCutIn: 0.5,           // s, the top fading in
+  topCutColour: '#0b0b0b', // what it fades through
 
   // The full stop's force field
   field: 'on',             // per breakpoint, like every setting (Desktop / Mobile)
@@ -108,6 +132,12 @@ export const FOOTER_DEFAULTS = {
 export const FOOTER_MOBILE = {
   padTop: 64,
   headCol: 1, headSpan: 4,
+  headSize: 56, headLeading: 56, headTracking: -2.8,
+  buttonHeight: 56, buttonMinWidth: 120, buttonPadX: 24, buttonSize: 18, buttonLeading: 24,
+  logoWidth: 200,
+  logoGap: 32,
+  topSize: 56,
+  topGap: 28,
   colTop: 260,
   col1Col: 1, col2Col: 3, colSpan: 2,
   col1Nudge: 0,
@@ -144,9 +174,21 @@ export function createFooter(el, config) {
   const button = document.createElement('a');
   button.className = 'foot__btn';
   const buttonLabel = document.createElement('span');
-  const arrow = Object.assign(document.createElement('img'), { src: arrowUrl, alt: '', width: 24, height: 24 });
-  button.append(buttonLabel, arrow);
+  button.append(buttonLabel);
   intro.append(head, button);
+
+  // Back to top
+  const topBtn = document.createElement('button');
+  topBtn.type = 'button';
+  topBtn.className = 'foot__top';
+  topBtn.setAttribute('aria-label', 'Back to top');
+  const topIcon = Object.assign(document.createElement('img'), { src: arrowUpUrl, alt: '', width: 24, height: 24 });
+  topBtn.append(topIcon);
+  topBtn.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('page:top', {
+      detail: { out: cfg.topCutOut, in: cfg.topCutIn, colour: cfg.topCutColour },
+    }));
+  });
 
   // Columns
   const cols = [1, 2].map(() => {
@@ -183,7 +225,7 @@ export function createFooter(el, config) {
   let legalKey = '';
   let legalEls = [];
 
-  content.append(intro, ...cols.map((c) => c.col), logoMask, legal);
+  content.append(intro, ...cols.map((c) => c.col), logoMask, legal, topBtn);
   el.append(content, shade);
 
   // Line reveals: fixed texts, plus the list items (rebuilt only when a list
@@ -244,11 +286,14 @@ export function createFooter(el, config) {
     Object.assign(button.style, {
       background: cfg.buttonBg, color: cfg.buttonInk, borderColor: cfg.buttonInk,
       filter: `drop-shadow(0 2px 0 ${cfg.buttonShadow})`,
+      height: `${cfg.buttonHeight}px`, minWidth: `${cfg.buttonMinWidth}px`,
+      padding: `0 ${cfg.buttonPadX}px`,
+      fontSize: `${cfg.buttonSize}px`, lineHeight: `${cfg.buttonLeading}px`,
     });
 
     cols.forEach((c, i) => {
       const s = gridSpan(W, cfg[`col${i + 1}Col`], cfg.colSpan);
-      Object.assign(c.col.style, { left: `${s.x + (cfg[`col${i + 1}Nudge`] || 0)}px`, width: `${s.w}px`, top: `${cfg.colTop}px`, gap: `${cfg.colTitleGap}px` });
+      Object.assign(c.col.style, { display: cfg.columns === 'on' ? '' : 'none', left: `${s.x + (cfg[`col${i + 1}Nudge`] || 0)}px`, width: `${s.w}px`, top: `${cfg.colTop}px`, gap: `${cfg.colTitleGap}px` });
       c.title.textContent = cfg[`col${i + 1}Title`];
       Object.assign(c.title.style, { fontSize: `${cfg.colTitleSize}px`, lineHeight: `${cfg.colTitleLeading}px`, letterSpacing: `${cfg.colTitleTracking}px` });
       c.list.style.gap = `${cfg.itemGap}px`;
@@ -262,13 +307,21 @@ export function createFooter(el, config) {
     const gw = W - 2 * m;
     Object.assign(legal.style, { left: `${m}px`, width: `${gw}px`, bottom: `${cfg.legalBottom}px` });
     legalEls.forEach(({ e }) => Object.assign(e.style, { fontSize: `${cfg.legalSize}px`, lineHeight: `${cfg.legalLeading}px`, letterSpacing: `${cfg.legalTracking}px` }));
-    const lw = gw * (LOGO_W / LOGO_BOX), lh = lw * (LOGO_H / LOGO_W);
+    const lw = Math.min(gw, cfg.logoWidth) * (LOGO_W / LOGO_BOX), lh = lw * (LOGO_H / LOGO_W);
     Object.assign(logoMask.style, {
       display: cfg.logo === 'on' ? '' : 'none',
       left: `${m}px`, width: `${lw}px`, height: `${lh}px`,
       bottom: `${cfg.legalBottom + cfg.legalLeading + cfg.logoGap}px`,
     });
     layoutField(lw / LOGO_W);
+    Object.assign(topBtn.style, {
+      display: cfg.top === 'on' ? '' : 'none',
+      right: `${m}px`, bottom: `${cfg.legalBottom + cfg.legalLeading + cfg.topGap}px`,
+      width: `${cfg.topSize}px`, height: `${cfg.topSize}px`,
+      background: cfg.topBg, borderColor: cfg.topInk,
+      filter: `drop-shadow(0 2px 0 ${cfg.topShadow})`,
+    });
+    Object.assign(topIcon.style, { width: `${cfg.topIconSize}px`, height: `${cfg.topIconSize}px` });
 
     shade.style.background = cfg.shadeColour;
 
@@ -385,7 +438,8 @@ export function createFooter(el, config) {
 
   // Pointer: mouse and pen hover; a touch counts while the finger is down.
   function onFieldPointer(e) {
-    if (!fieldOn()) return;
+    // Nothing to measure until the footer is on screen (and nothing to settle).
+    if (!fieldOn() || (progress <= 0 && !fld.raf)) return;
     if (e.pointerType === 'touch' && e.type === 'pointermove' && !e.buttons && e.pressure === 0) return;
     fpointer.x = e.clientX; fpointer.y = e.clientY;
     fpointer.in = !(e.type === 'pointerup' || e.type === 'pointercancel') || e.pointerType !== 'touch';

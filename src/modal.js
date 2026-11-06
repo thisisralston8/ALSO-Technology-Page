@@ -109,10 +109,17 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   const SLOT = Object.fromEntries(MODAL_SLOTS.map((sl) => [sl.id, sl]));
   const phone = matchMedia('(max-width: 1023px)');
   const videos = new Set();
+  // Videos download nothing until they're about to be seen (their poster
+  // shows until then), and play only while on screen.
   const io = new IntersectionObserver((entries) => entries.forEach((e) => {
     if (e.isIntersecting && tl && !closing) e.target.play().catch(() => {});
     else e.target.pause();
   }), { root: scroller, rootMargin: '10% 0px' });
+  const near = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.preload = 'auto';
+    near.unobserve(e.target);
+  }), { root: scroller, rootMargin: '100% 0px' });
 
   function fillSlot(f) {
     const id = f.dataset.slot, sl = SLOT[id];
@@ -121,19 +128,20 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     const key = it ? `${it.kind}:${it.src}` : `none:${stem}`;
     if (f.dataset.key !== key) {
       f.dataset.key = key;
-      f.querySelectorAll('video').forEach((v) => { io.unobserve(v); videos.delete(v); v.removeAttribute('src'); v.load(); });
+      f.querySelectorAll('video').forEach((v) => { io.unobserve(v); near.unobserve(v); videos.delete(v); v.removeAttribute('src'); v.load(); });
       f.replaceChildren();
       if (it?.kind === 'video') {
         const v = document.createElement('video');
-        Object.assign(v, { muted: true, loop: true, playsInline: true, preload: 'metadata', src: it.src });
+        Object.assign(v, { muted: true, loop: true, playsInline: true, preload: 'none', src: it.src });
         v.setAttribute('muted', '');
         v.setAttribute('playsinline', '');
         if (it.poster) v.poster = it.poster;
         f.appendChild(v);
         videos.add(v);
         io.observe(v);
+        near.observe(v);
       } else if (it) {
-        const img = Object.assign(document.createElement('img'), { src: it.src, alt: '', decoding: 'async' });
+        const img = Object.assign(document.createElement('img'), { src: it.src, alt: '', decoding: 'async', loading: 'lazy' });
         f.appendChild(img);
       } else {
         const tag = document.createElement('span');
@@ -155,7 +163,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   const stopVideos = () => videos.forEach((v) => v.pause());
 
   function build() {
-    videos.forEach((v) => { io.unobserve(v); v.removeAttribute('src'); v.load(); });
+    videos.forEach((v) => { io.unobserve(v); near.unobserve(v); v.removeAttribute('src'); v.load(); });
     videos.clear();
     stack.replaceChildren();
     cards = layers.map((l, i) => {

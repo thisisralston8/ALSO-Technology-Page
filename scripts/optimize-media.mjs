@@ -14,7 +14,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readdir, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -32,6 +32,10 @@ const VIDEO_VARIANTS = [
 const THUMB = 360;
 // The Explore modal's media is shown large: a lighter copy, not a thumbnail.
 const MODAL_IMAGE = 2400;
+
+// Each copy is written to a temporary name and moved into place, so a page
+// never reads a half-written file and two runs can't trip over each other.
+const tmpFor = (out) => `${out}.${process.pid}.tmp${path.extname(out)}`;
 
 const stemOf = (f) => path.basename(f).replace(/\.[^.]+$/, '');
 const mtime = (f) => stat(f).then((s) => s.mtimeMs, () => 0);
@@ -62,9 +66,16 @@ export async function optimizeVideo(file, log = console.log, folder = 'video') {
     if (await mtime(out) >= srcTime) continue;
     const bin = await transcoder();
     const t0 = Date.now();
-    const { stdout } = await run(bin, [file, out, String(v.width), String(v.bps)], { maxBuffer: 1 << 20 });
-    const kb = Math.round((await stat(out)).size / 1024);
-    log(`[media] ${path.basename(file)} → ${v.name} ${stdout.trim()} ${(kb / 1024).toFixed(1)} MB (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+    const tmp = tmpFor(out);
+    await rm(tmp, { force: true });
+    const { stdout } = await run(bin, [file, tmp, String(v.width), String(v.bps)], { maxBuffer: 1 << 20 });
+    // An MP4 that's already lighter than the re-encode is used as it is.
+    const [outSize, srcSize] = [(await stat(tmp)).size, (await stat(file)).size];
+    const keep = path.extname(file).toLowerCase() === '.mp4' && srcSize < outSize;
+    if (keep) await copyFile(file, tmp);
+    await rename(tmp, out);
+    const kb = Math.round(Math.min(outSize, keep ? srcSize : outSize) / 1024);
+    log(`[media] ${path.basename(file)} → ${v.name} ${keep ? '(original is smaller, kept)' : stdout.trim()} ${(kb / 1024).toFixed(1)} MB (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
   }
 }
 
@@ -80,7 +91,9 @@ export async function optimizeImage(file, folder, log = console.log) {
   const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]);
   const long = Math.max(...[...stdout.matchAll(/pixel(?:Width|Height): (\d+)/g)].map((m) => +m[1]));
   const resize = long > size ? ['-Z', String(size)] : [];
-  await run('sips', [...resize, '-s', 'format', 'jpeg', '-s', 'formatOptions', quality, file, '--out', out]);
+  const tmp = tmpFor(out);
+  await run('sips', [...resize, '-s', 'format', 'jpeg', '-s', 'formatOptions', quality, file, '--out', tmp]);
+  await rename(tmp, out);
   log(`[media] ${path.basename(file)} → ${folder === 'modal' ? 'web copy' : 'thumbnail'}`);
 }
 
@@ -91,6 +104,23 @@ export async function optimizeAll(log = console.log) {
   for (const f of await list('modal')) {
     await optimizeImage(f, 'modal', log);
     await optimizeVideo(f, log, 'modal');
+  }
+  await prune(log);
+}
+
+// Copies whose original is gone (deleted, or a folder no longer used) are
+// removed, so nothing stale ships. Only ever touches src/assets/optimized.
+export async function prune(log = console.log) {
+  const names = (dir) => readdir(dir).then((fs) => fs.filter((f) => !f.startsWith('.')), () => []);
+  for (const folder of await names(A('optimized'))) {
+    const sources = new Set((await names(A(folder))).map(stemOf));
+    for (const f of await names(A('optimized', folder))) {
+      if (f.includes('.tmp')) continue;
+      const stem = f.replace(/(\.(desktop|mobile))?\.[^.]+$/, '');
+      if (sources.has(stem)) continue;
+      await unlink(A('optimized', folder, f));
+      log(`[media] removed stale copy optimized/${folder}/${f}`);
+    }
   }
 }
 

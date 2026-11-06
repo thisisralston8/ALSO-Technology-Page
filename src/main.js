@@ -6,7 +6,6 @@
 
 import gsap from 'gsap';
 import ScrollTrigger from 'gsap/ScrollTrigger';
-import Observer from 'gsap/Observer';
 import Lenis from 'lenis';
 
 import './style.css';
@@ -21,15 +20,13 @@ import { createFooter, FOOTER_DEFAULTS, FOOTER_MOBILE } from './beats/footer.js'
 import { createNav } from './nav.js';
 import { createModal } from './modal.js';
 import { createSteps } from './steps.js';
-import { createInspector } from './editor/inspector.js';
 import { createGrain, GRAIN_DEFAULTS } from './grain.js';
 import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
 import { GRID_DEFAULTS, GRID_MOBILE, setGrid, showGridOverlay } from './grid.js';
 import { load as loadSaved, save as saveState, saveDefaults, loadView, watch } from './editor/store.js';
-import { videoUploader, mediaUploader, mediaDeleter } from './editor/upload.js';
 import savedDefaults from './defaults.json';
 
-gsap.registerPlugin(ScrollTrigger, Observer);
+gsap.registerPlugin(ScrollTrigger);
 // A phone's address bar showing or hiding resizes the window; don't re-measure
 // every scroll range for that (the director re-lays-out on real resizes).
 ScrollTrigger.config({ ignoreMobileResize: true });
@@ -42,6 +39,13 @@ ScrollTrigger.config({ ignoreMobileResize: true });
 
 const fileStem = (path) => path.split('/').pop().replace(/\.[^.]+$/, '');
 const byStem = (glob) => Object.fromEntries(Object.entries(glob).map(([p, src]) => [fileStem(p), src]));
+// The originals (some are 50 MB) are only ever a fallback on the dev server,
+// for a file dropped in before its copy is made. A production build lists
+// media from the optimized copies alone, so the originals never ship. The
+// globs below are lazy, so in a build `import.meta.env.DEV` is false and they
+// drop out entirely; on the dev server each original is served from its path.
+const DEV = import.meta.env.DEV;
+const devOriginals = (glob) => Object.keys(glob).map((p) => [p, new URL(p, import.meta.url).pathname]);
 // The page's phone breakpoint (see "mobile settings" below): phones and
 // tablets — everything narrower than 1024 px — get the Mobile settings and
 // the 4-column grid.
@@ -64,20 +68,27 @@ const pickable = [...heroUrls.map((src) => ({ src })), ...images];
 // Traffic's images: everything in src/assets/traffic — drop images in (or
 // take them out) and the page reloads with them. Each is shown at its 360 px
 // thumbnail; the pieces are never bigger than that.
-const trafficGlob = import.meta.glob('./assets/traffic/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP}', { eager: true, query: '?url', import: 'default' });
 const trafficThumbs = byStem(import.meta.glob('./assets/optimized/traffic/*.jpg', { eager: true, query: '?url', import: 'default' }));
-const trafficImages = Object.entries(trafficGlob).sort().map(([p, src]) => ({ src: trafficThumbs[fileStem(p)] || src }));
+const trafficList = DEV
+  ? devOriginals(import.meta.glob('./assets/traffic/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP}'))
+  : Object.entries(trafficThumbs);
+const trafficImages = trafficList.sort().map(([p, src]) => ({ src: trafficThumbs[fileStem(p)] || src }));
 
 // Hero videos (Open road): each video in assets/video, with a same-named .jpg
 // as its poster, referred to by name. "Upload video…" adds to this folder.
 // Played from its optimized copy: the phone one on a phone, else the desktop
 // one, else the original.
-const videoUrls = import.meta.glob('./assets/video/*.{mp4,mov,webm,m4v}', { eager: true, query: '?url', import: 'default' });
 const posterUrls = byStem(import.meta.glob('./assets/video/*.jpg', { eager: true, query: '?url', import: 'default' }));
 const optimizedVideo = byStem(import.meta.glob('./assets/optimized/video/*.mp4', { eager: true, query: '?url', import: 'default' }));
 const phoneAtLoad = matchMedia(SMALL_SCREEN).matches;
-const videos = Object.entries(videoUrls).sort().map(([path, src]) => {
-  const stem = fileStem(path);
+// Each video once, by name: its original on the dev server, else its copies.
+const variantStem = (p) => fileStem(p).replace(/\.(desktop|mobile)$/, '');
+const onePerStem = (list) => [...new Map(list.map(([p, src]) => [variantStem(p), [p, src]])).values()];
+const videoList = DEV
+  ? devOriginals(import.meta.glob('./assets/video/*.{mp4,mov,webm,m4v}'))
+  : onePerStem(Object.entries(optimizedVideo).map(([stem, src]) => [`${stem}.mp4`, src]));
+const videos = videoList.sort().map(([path, src]) => {
+  const stem = variantStem(path);
   const best = (phoneAtLoad && optimizedVideo[`${stem}.mobile`]) || optimizedVideo[`${stem}.desktop`] || src;
   return { stem, src: best, poster: posterUrls[stem] || '' };
 });
@@ -86,11 +97,14 @@ const videos = Object.entries(videoUrls).sort().map(([path, src]) => {
 // name. "Upload image or video…" on a slot adds to this folder. Each is shown
 // from its optimized copy (a 2400 px JPEG; the phone or desktop MP4), else
 // the original. A video's poster is the same-named JPEG in modal/posters.
-const modalGlob = import.meta.glob('./assets/modal/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP,mp4,mov,webm,m4v,MP4,MOV}', { eager: true, query: '?url', import: 'default' });
 const modalPosters = byStem(import.meta.glob('./assets/modal/posters/*.jpg', { eager: true, query: '?url', import: 'default' }));
-const modalOptimized = byStem(import.meta.glob('./assets/optimized/modal/*.{jpg,mp4}', { eager: true, query: '?url', import: 'default' }));
-const modalMedia = Object.entries(modalGlob).sort().map(([p, src]) => {
-  const stem = fileStem(p);
+const modalOptimizedGlob = import.meta.glob('./assets/optimized/modal/*.{jpg,mp4}', { eager: true, query: '?url', import: 'default' });
+const modalOptimized = byStem(modalOptimizedGlob);
+const modalList = DEV
+  ? devOriginals(import.meta.glob('./assets/modal/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP,mp4,mov,webm,m4v,MP4,MOV}'))
+  : onePerStem(Object.entries(modalOptimizedGlob));
+const modalMedia = modalList.sort().map(([p, src]) => {
+  const stem = variantStem(p);
   const kind = /\.(mp4|mov|webm|m4v)$/i.test(p) ? 'video' : 'image';
   if (kind === 'image') { const best = modalOptimized[stem] || src; return { stem, kind, src: best, thumb: best, poster: '' }; }
   const best = (phoneAtLoad && modalOptimized[`${stem}.mobile`]) || modalOptimized[`${stem}.desktop`] || src;
@@ -139,7 +153,13 @@ gsap.ticker.lagSmoothing(0);
 
 /* ---------- config ---------- */
 
-let saved = loadSaved();
+/* The editor (the settings panel, this browser's unsaved tweaks, uploads) is
+   prototype tooling. `npm run build:site` builds the page without any of it:
+   just the saved defaults (defaults.json), which is what goes to production.
+   Everywhere else the panel is loaded on demand, after the page is running. */
+const EDITOR = import.meta.env.VITE_EDITOR !== 'off';
+
+let saved = EDITOR ? loadSaved() : {};
 
 /* Three layers, lowest first:
      1. the built-in *_DEFAULTS in each beat's source
@@ -206,7 +226,7 @@ const authored = { page, 'open-road': config.openRoad, traffic: config.traffic, 
 const director = createDirector({
   root: document.getElementById('page'),
   handoffLayer: document.getElementById('handoff'),
-  deps: { gsap, ScrollTrigger, Observer },
+  deps: { gsap, ScrollTrigger },
   beats: [
     {
       id: 'open-road', name: 'Open road',
@@ -283,6 +303,30 @@ const modal = createModal({
 let follow = null;
 document.addEventListener('plat:explore', (e) => modal.open({ ...e.detail, cfg: effective(authored.platform) }));
 
+// Back to top (the footer's arrow): a quick cut, like the modal's layer
+// switcher — fade out, jump, fade back in — rather than scrolling the whole
+// page back. Page chrome: the footer only asks for it.
+const cut = document.createElement('div');
+cut.className = 'page-cut';
+cut.setAttribute('aria-hidden', 'true');
+document.body.appendChild(cut);
+let cutTl = null;
+document.addEventListener('page:top', (e) => {
+  const { out = 0.3, in: inn = 0.5, colour = '#0b0b0b' } = e.detail || {};
+  cutTl?.kill();
+  cut.style.background = colour;
+  cutTl = gsap.timeline()
+    .set(cut, { visibility: 'visible', pointerEvents: 'auto' })
+    .to(cut, { opacity: 1, duration: out, ease: 'power2.in' })
+    .add(() => {
+      lenis.scrollTo(0, { immediate: true, force: true });
+      ScrollTrigger.update();
+      document.activeElement?.blur?.();
+    })
+    .to(cut, { opacity: 0, duration: inn, ease: 'power2.out' })
+    .set(cut, { visibility: 'hidden', pointerEvents: 'none' });
+});
+
 // The platform's three layers scroll in steps (steps.js).
 const steps = createSteps({ gsap, lenis, director, getConfig: () => effective(authored.platform) });
 
@@ -331,21 +375,29 @@ function currentSettings() {
    panel of its own; the grid and wireframe follow the window that has one. */
 const embedded = new URLSearchParams(location.search).has('embed');
 
-const inspector = embedded ? null : createInspector({
-  director,
-  images: pickable,
-  extras: [pageEntry],
-  // Only the dev server can write the file; a static build has no endpoint.
-  onSaveDefaults: import.meta.env.DEV ? () => saveDefaults(currentSettings()) : null,
-  media: modalMedia,
-  onUploadMedia: mediaUploader({ library: modalMedia, persist: import.meta.env.DEV }),
-  onDeleteMedia: mediaDeleter({ library: modalMedia, persist: import.meta.env.DEV }),
-  onUploadVideo: videoUploader({ getConfig: () => authored['open-road'], onChange: (next) => onChange('open-road', next), saveState, persist: import.meta.env.DEV }),
-  getConfig: (id) => authored[id],
-  onChange,
-  phoneQuery: PHONE,
-  sheetQuery: SMALL_SCREEN,
-});
+let inspector = null;
+if (EDITOR && !embedded) {
+  Promise.all([import('./editor/inspector.js'), import('./editor/upload.js')]).then(([{ createInspector }, up]) => {
+    inspector = mountInspector(createInspector, up);
+  });
+}
+function mountInspector(createInspector, { videoUploader, mediaUploader, mediaDeleter }) {
+  return createInspector({
+    director,
+    images: pickable,
+    extras: [pageEntry],
+    // Only the dev server can write the file; a static build has no endpoint.
+    onSaveDefaults: import.meta.env.DEV ? () => saveDefaults(currentSettings()) : null,
+    media: modalMedia,
+    onUploadMedia: mediaUploader({ library: modalMedia, persist: import.meta.env.DEV }),
+    onDeleteMedia: mediaDeleter({ library: modalMedia, persist: import.meta.env.DEV }),
+    onUploadVideo: videoUploader({ getConfig: () => authored['open-road'], onChange: (next) => onChange('open-road', next), saveState, persist: import.meta.env.DEV }),
+    getConfig: (id) => authored[id],
+    onChange,
+    phoneQuery: PHONE,
+    sheetQuery: SMALL_SCREEN,
+  });
+}
 
 /* Edits made in another window — the panel driving the phone preview, or a
    second browser window — apply here as they're made. Only sections whose
@@ -359,7 +411,7 @@ function syncView() {
   showGridOverlay(!!v.grid);
   document.documentElement.classList.toggle('is-wireframe', !!v.wireframe);
 }
-watch({
+if (EDITOR) watch({
   onConfig() {
     saved = loadSaved();
     let changed = false;

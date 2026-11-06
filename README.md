@@ -9,8 +9,11 @@ npm install
 npm run dev        # http://localhost:4860
 npm run dev:phone  # the same, also on your Wi-Fi — open the "Network" URL it prints on your phone
 npm run optimize   # regenerate the optimized media (runs on its own on dev start and on build)
-npm run build
+npm run build       # the prototype as a static site, settings panel included (loaded on demand)
+npm run build:site  # the page as it should ship: no panel, just src/defaults.json
 ```
+
+Handing this off? Start with `HANDOFF.md`.
 
 `dev:phone` exposes the dev server, and its *Save as default* and upload endpoints, to everyone on the network. Use it on trusted Wi-Fi only.
 
@@ -64,7 +67,21 @@ Content (Figma "Desktop - 113 / 114"): a headline and three categories (Logistic
 
 ### Footer (section 6)
 
-`src/beats/footer.js`. Revealed from underneath: Investors and careers scrolls away like a sheet while the footer's content follows more slowly (*Parallax*: 0 scrolls with the page, 1 stays still underneath), arriving exactly as the footer fills the screen; the footer's own box clips it, so only the uncovered part shows. A shade over it clears as it's uncovered. A pure function of progress (director `lead` + `flow`) with no smoothing of its own — the page's Lenis is what makes it soft. Content (Figma "Desktop - 119"): headline and Careers button top left, two link columns (column 1 nudged −12 px off the grid to sit at the screen's middle, as in Figma), the ALSO. wordmark (`src/assets/footer/also-logo.svg`, from Figma) across the grid, and the small links along the bottom. Text gets the page's line reveal and the wordmark rises from behind its own edge — each only once the footer's edge has actually uncovered it (the parallax holds content up behind the section above). The wordmark's full stop is a force field: drawn on a small canvas as a grid of squares (the SVG's own dot hidden) that make the solid dot at rest; hovering near it pushes squares away from the cursor (gaps opening, colour shifting) and damped springs pull them home when it leaves. Time-based, loop only while something moves; per breakpoint on/off (on touch, a finger on the dot). Settings: Footer → Transition in (parallax, curve, shade, shade colour, shade clears by), Section (height, colours) and Content (including Full stop force field: force, reach, randomness, hover area, disperse and return speed, settle, squares across, gaps, colours).
+`src/beats/footer.js`. It's revealed from underneath: Investors and careers scrolls away like a sheet, and the footer's content follows more slowly.
+
+- **The reveal:**
+  - *Parallax* sets how much the content holds back: 0 scrolls with the page, 1 stays still underneath. The content arrives exactly as the footer fills the screen.
+  - The footer's own box clips it, and a shade over it clears as it's uncovered.
+  - It's a pure function of progress (director `lead` + `flow`), with no smoothing of its own.
+- **Content** follows the Figma frame "Desktop - 123":
+  - A large headline and the Careers button, top left.
+  - The ALSO. wordmark bottom left, above a row of small links.
+  - A round back-to-top button bottom right.
+  - Two link columns from an earlier frame are still in the code, hidden by default.
+- **Line reveals:** text gets the page's line reveal, and the wordmark rises from behind its own edge, each only once the footer has actually uncovered it.
+- **Colour wave:** the headline gets the colour wave (`src/colorWave.js`).
+- **Force field:** the wordmark's full stop is drawn as a grid of squares. Hovering near it pushes them apart, and springs pull them home.
+- **Back to top:** the button dispatches `page:top`, and `main.js` makes a quick cut: a fade out, a jump to the top, and a fade in. Its timings and colour are in the panel.
 
 ### Cursor lens
 

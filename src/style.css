@@ -342,6 +342,17 @@ html.has-vert-cursor body > :not(.insp, .insp__show, .phone-preview) * { cursor:
   font: 900 16px/24px 'Serial C', var(--display); text-transform: uppercase; white-space: nowrap;
 }
 .foot__btn img { display: block; width: 24px; height: 24px; }
+.foot__top {
+  position: absolute; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid #0b0b0b; border-radius: 999px;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.foot__top img { display: block; flex: none; }
+.foot__top:hover { opacity: 0.85; }
+.foot__top:focus-visible { outline: 2px solid #ac74fc; outline-offset: 3px; }
+/* The quick cut back to the top (main.js, `page:top`). */
+.page-cut { position: fixed; inset: 0; z-index: 2147483000; opacity: 0; visibility: hidden; pointer-events: none; }
 .foot__col { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
 .foot__coltitle { margin: 0; font-family: 'Serial C', var(--display); font-weight: 900; text-transform: uppercase; }
 .foot__items { display: flex; flex-direction: column; align-items: flex-start; }
@@ -426,18 +437,28 @@ html.is-wireframe .traf__car.is-photo {
 .plat__layer { position: absolute; }
 .plat__layer h3 { margin: 0 0 14px; font-weight: 400; letter-spacing: -0.03em; line-height: 1; }
 .plat__layer p { margin: 0 0 22px; line-height: 1.45; opacity: 0.8; }
+/* Figma "Button" (Primary, Default), node 13365:690 */
 .plat__btn {
   pointer-events: auto;
-  padding: 9px 18px;
-  border: 0;
-  border-radius: 99px;
-  background: var(--plat-fg, #fff);
-  color: var(--plat-night, #000);
-  font: 500 11px/1 var(--display);
-  letter-spacing: 0.12em;
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  height: 48px;
+  min-width: 96px;
+  padding: 12px 24px;
+  border: 1px solid #0b0b0b;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0b0b;
+  filter: drop-shadow(0 2px 0 #48316a);
+  font: 900 16px/24px 'Serial C', var(--display);
+  letter-spacing: 0;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
+  transition: opacity 0.15s;
 }
+.plat__btn:hover { opacity: 0.85; }
+.plat__btn:focus-visible { outline: 2px solid #ac74fc; outline-offset: 3px; }
 
 /* ---------- motion trail (see trail.js) ---------- */
 
