@@ -1,4 +1,6 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { writeFile, readFile, mkdir, rename, access, rm, copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import { createWriteStream } from 'node:fs';
@@ -250,5 +252,7 @@ function optimizedMedia() {
 }
 
 export default defineConfig({
-  plugins: [saveDefaults(), uploadVideo(), uploadMedia(), deleteMedia(), optimizedMedia()],
+  // React and Tailwind are for the settings panel only (src/editor/panel):
+  // the page itself is plain JavaScript and CSS.
+  plugins: [react(), tailwindcss(), saveDefaults(), uploadVideo(), uploadMedia(), deleteMedia(), optimizedMedia()],
 });

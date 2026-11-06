@@ -99,7 +99,6 @@
     "blurbStart": 1,
     "blurbGap": 2.21,
     "startText": "Start ▣ small",
-    "startSize": 0.262,
     "startTracking": -0.045,
     "startGap": 1.38,
     "startY": 0.825,
@@ -233,11 +232,13 @@
       "flowSoft": 0.5,
       "nightGap": 68,
       "slotLift": 0.4,
-      "startSize": 0.4,
       "slotWidth": 10,
       "startGap": 1.02,
-      "startParallaxPx": 200
-    }
+      "startParallaxPx": 200,
+      "startSizePx": 110
+    },
+    "startSizePx": 377,
+    "startFit": "off"
   },
   "platform": {
     "length": 10,
@@ -250,7 +251,7 @@
     "capFade": 0.53,
     "textFade": 0.3,
     "textRise": 20,
-    "heroText": "The in-house platform built for a ride that’s out-of-this-world.",
+    "heroText": "Built in-house for a ride \nthat’s out-of-this-world.",
     "heroSize": 60,
     "heroCol": 4,
     "heroSpan": 6,
@@ -485,13 +486,13 @@
       "modalRatio_au3": "1:1",
       "modalRatio_au4": "1:1",
       "modalRatio_au5": "1:1",
-      "heroSize": 32,
+      "heroSize": 48,
       "heroCol": 1,
       "heroSpan": 4,
       "textCol": 1,
       "textSpan": 4,
       "textY": 0.12,
-      "titleSize": 32,
+      "titleSize": 48,
       "bodySize": 16,
       "heroZoom": 2.4,
       "view1X": 0.19,
@@ -527,7 +528,11 @@
       "modalSwapFade": 0.3,
       "modalSwapStagger": 0.08,
       "modalSeg": "on",
-      "modalCloseIconSize": 0.4
+      "modalCloseIconSize": 0.4,
+      "heroText": "Built in-house for a ride \nthat’s out-of-this-world.",
+      "layer1Width": 2.5,
+      "steps": "off",
+      "stepDuration": 0.6
     }
   },
   "verticals": {
@@ -711,14 +716,15 @@
       "invGap": 64,
       "listCol": 1,
       "listSpan": 4,
-      "partnerSize": 24,
-      "partnerLeading": 28,
-      "partnerTracking": -1,
-      "partnerGap": 28,
+      "partnerSize": 48,
+      "partnerLeading": 56,
+      "partnerTracking": -3,
+      "partnerGap": 32,
       "ruleGap": 16,
       "contactCol": 1,
       "fg": "#000000",
-      "trail": "off"
+      "trail": "off",
+      "height": 1
     }
   },
   "footer": {
@@ -733,10 +739,10 @@
     "padTop": 80,
     "headline": "Join us in building the future of transportation.",
     "headCol": 1,
-    "headSpan": 3,
-    "headSize": 32,
-    "headLeading": 36,
-    "headTracking": -1.5,
+    "headSpan": 7,
+    "headSize": 120,
+    "headLeading": 112,
+    "headTracking": -6,
     "wave": "on",
     "waveFrom": "#3a3a3a",
     "waveColour": "#ac74fc",
@@ -785,12 +791,12 @@
     "itemTracking": -0.25,
     "logo": "on",
     "logoReveal": "on",
-    "logoGap": 32,
+    "logoGap": 44,
     "legal": [
+      "Investor inquiries",
       "Media inquiries",
       "Terms",
-      "Privacy",
-      "Supplier terms"
+      "Privacy"
     ],
     "legalBottom": 24,
     "legalSize": 12,
@@ -823,14 +829,18 @@
       "colTitleGap": 20,
       "itemSize": 16,
       "itemLeading": 24,
-      "legalSize": 11,
-      "logoGap": 24,
+      "legalSize": 14,
+      "logoGap": 32,
       "legalBottom": 20,
       "titleSize": 44,
       "titleCol": 1,
       "titleSpan": 4,
       "shadeColour": "#0B0B0B",
-      "parallaxCurve": "linear"
+      "parallaxCurve": "linear",
+      "field": "off",
+      "headSize": 56,
+      "headLeading": 56,
+      "headTracking": -2.8
     },
     "title": "Last section",
     "titleSize": 92,

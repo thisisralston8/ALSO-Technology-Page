@@ -27,19 +27,19 @@ npm run build:site   # the page as it should ship: no panel, settings baked in �
 
 | Keep (the page) | Prototype only, drop it |
 |---|---|
-| `src/director.js` (scroll orchestration) | `src/editor/*` (settings panel, autosave, uploads) |
+| `src/director.js` (scroll orchestration) | `src/editor/*` (settings panel in React + HeroUI, autosave, uploads) |
 | `src/beats/*` (the six sections) | `vite.config.js` dev endpoints (`/__save-defaults`, `/__upload-*`, `/__delete-media`) |
 | `src/modal.js`, `src/modalContent.js` (Explore modal) | `src/defaults.prev.json` (backup of the last *Save as default*) |
-| `src/steps.js` (layer stepping), `src/nav.js` | `?embed` / phone-preview handling in `main.js` |
+| `src/steps.js` (layer stepping), `src/nav.js` | `?frame` / `?embed` / `?panel` handling in `main.js` and `page.js` |
 | `src/lineReveal.js`, `src/colorWave.js`, `src/grain.js`, `src/trail.js`, `src/grid.js`, `src/cover.js`, `src/svgIcon.js` | `scripts/` (macOS-only media optimizer; Shopify's CDN replaces it) |
 | `src/three.js` (the trimmed three.js entry) | `localStorage` settings layer (already off in `build:site`) |
-| `src/style.css`, `src/defaults.json`, `src/main.js` (boot) | |
+| `src/style.css`, `src/defaults.json`, `src/page.js` (boot) and `src/main.js` (entry) | `react`, `react-dom`, `@heroui/*`, `tailwindcss` and the Vite React/Tailwind plugins (panel only) |
 
-`main.js` has a single switch, `EDITOR` (`VITE_EDITOR=off` in `build:site`), that removes the panel, the uploads and the localStorage layer. In that mode the panel isn't even in the bundle.
+`main.js` has a single switch, `EDITOR` (`VITE_EDITOR=off` in `build:site`), that removes the panel, the uploads and the localStorage layer. In that mode none of it is in the bundle, React and HeroUI included. Either way the page is `page.js`; `main.js` just decides whether this document is the page or the editor around it.
 
 ## How it works (one paragraph per idea)
 
-**One scroll, one smoothing.** There is exactly one Lenis instance and one ScrollTrigger setup, both in `main.js`. `director.js` gives each section a sticky stage and a scroll range, and feeds it a single number: its progress, from 0 to 1.
+**One scroll, one smoothing.** There is exactly one Lenis instance and one ScrollTrigger setup, both in `page.js`. `director.js` gives each section a sticky stage and a scroll range, and feeds it a single number: its progress, from 0 to 1.
 
 **Sections are pure functions of progress.** A section (a "beat") implements `seek(p)`, `setConfig(cfg)`, `relayout()` and `destroy()`. It never reads the scroll and never adds its own easing toward a target. Randomness is seeded (`rnd(i, k)`), so scrubbing backwards is exact.
 
@@ -91,7 +91,7 @@ These are suggestions; adjust them to your theme's conventions.
    - Anything in the theme that scrolls by itself (drawers, the cart) needs `data-lenis-prevent`, as the settings panel has here.
 4. **Media from Shopify's CDN.**
    - The prototype lists media from folders with `import.meta.glob` and refers to each file by name (its *stem*, e.g. `field-motion-1`). Settings store those names, never URLs.
-   - On Shopify, upload the files to *Files*, or use section blocks or metafields. Render a JSON map of stem → URL into the page (for example `<script type="application/json" id="tech-media">`) and build the same lists `main.js` builds: `trafficImages`, `videos` and `modalMedia`.
+   - On Shopify, upload the files to *Files*, or use section blocks or metafields. Render a JSON map of stem → URL into the page (for example `<script type="application/json" id="tech-media">`) and build the same lists `page.js` builds: `trafficImages`, `videos` and `modalMedia`.
    - **Sizes the page expects:**
      - Traffic images are shown at most 360 px, so `image_url: width: 360` is enough.
      - Modal images are shown up to about 1200 CSS px; use a 2400 px source with `srcset`.

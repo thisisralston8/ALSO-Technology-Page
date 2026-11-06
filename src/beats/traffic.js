@@ -166,7 +166,7 @@ export function createTraffic(el, config) {
     slot.className = 'traf__slot';
     if (rest.length) { head.append(slot); letters(head, rest.join(SLOT)); }
     Object.assign(head.style, {
-      fontSize: `${cfg.startSize * W}px`,
+      fontSize: `${cfg.startSizePx}px`,
       letterSpacing: `${cfg.startTracking}em`,
       top: `${(cfg.blurbStart + 2 * cfg.blurbGap + cfg.startGap) * H}px`,
     });
@@ -182,16 +182,18 @@ export function createTraffic(el, config) {
     head.style.marginLeft = '0px';
     if (centred() && rest.length) {
       // Its two halves aren't the same width, so centring the gap can push
-      // the longer word off screen: scale the line down just enough that the
-      // longer side still fits inside the margin.
+      // the longer word off screen. With *Keep inside the screen* on, the line
+      // is scaled down just enough that the longer side still fits inside the
+      // margin; off (the default), it keeps its set size and may run off the
+      // edges.
       const h0 = rel(head.getBoundingClientRect());
       let s0 = rel(slot.getBoundingClientRect());
       const mid = s0.x + s0.w / 2;
       const reach = Math.max(mid - h0.x, h0.x + h0.w - mid);
       // It's kept inside the grid's margins.
       const room = W / 2 - gridOptions().gridMargin;
-      if (reach > room && reach > 0) {
-        head.style.fontSize = `${(cfg.startSize * W * room) / reach}px`;
+      if (cfg.startFit === 'on' && reach > room && reach > 0) {
+        head.style.fontSize = `${(cfg.startSizePx * room) / reach}px`;
         s0 = rel(slot.getBoundingClientRect());
       }
       head.style.marginLeft = `${(W / 2 - (s0.x + s0.w / 2)).toFixed(2)}px`;
@@ -750,7 +752,8 @@ export const TRAFFIC_DEFAULTS = {
 
   // "Start small"
   startText: 'Start ▣ small',
-  startSize: 0.2,          // × screen width
+  startSizePx: 377,        // px (a phone value of its own: TRAFFIC_MOBILE)
+  startFit: 'off',         // 'on': scaled down to keep the longer word inside the grid margins
   startTracking: -0.045,   // em
   startGap: 1.0,           // below the last line, × screen height
   startY: 0.5,             // where it stops on screen (its middle), × screen height
@@ -823,6 +826,7 @@ export const TRAFFIC_DEFAULTS = {
    smaller lanes on a narrow road; on the 4-column grid the lines take three
    columns from the left, three to the right, and all four, centred. */
 export const TRAFFIC_MOBILE = {
+  startSizePx: 110,
   blurbSize: 22,
   blurb1Col: 1, blurb1Span: 3, blurb1Align: 'left',
   blurb2Col: 2, blurb2Span: 3, blurb2Align: 'right',

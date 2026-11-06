@@ -17,7 +17,7 @@ Handing this off? Start with `HANDOFF.md`.
 
 `dev:phone` exposes the dev server, and its *Save as default* and upload endpoints, to everyone on the network. Use it on trusted Wi-Fi only.
 
-Press **H** to show or hide the inspector, and **W** to toggle wireframe mode (also the **Images / Wireframe** switch at the top of the inspector). Wireframe turns every image into a flat `#d9d9d9` fill so a review stays on motion and layout; it's a CSS filter, so nothing about timing changes. Add `?wireframe=1` to a link to open it in wireframe for that visit.
+The settings panel is docked on the right of the window, with the page beside it in a frame that's exactly the space left, so the page lays itself out for that width. Press **H** to hide or show the panel (the page then gets the full window), **W** for wireframe (also **Images / Wireframe** at the top of the panel), and **G** for the layout grid. The shortcuts work wherever the focus is, the page or the panel. Each section's parts are tabs, its groups are accordions, and *Find a control…* searches all of them. Wireframe turns every image into a flat `#d9d9d9` fill so a review stays on motion and layout; it's a CSS filter, so nothing about timing changes. Add `?wireframe=1` to a link to open it in wireframe for that visit.
 
 | Beat | Name | Copy |
 |---|---|---|
@@ -33,7 +33,7 @@ Settings come from three layers, lowest first:
 2. **`src/defaults.json`** — the project defaults
 3. this browser's own unsaved tweaks (localStorage, saved automatically as you edit)
 
-**Save as default** (top of the inspector footer) writes everything currently on screen into `src/defaults.json`, so it becomes the starting point for anyone who opens the page — including a production build, which bakes the file in. It asks to confirm first, keeps the previous file as `src/defaults.prev.json` (copy it back to undo one save), clears your local tweaks (they now *are* the defaults) and reloads. It's only offered on the dev server, which is what writes the file. **Reset all** clears your local tweaks back to the saved defaults; to get back to the built-in values, set `src/defaults.json` to `{}`.
+**Save as default** (the panel's footer) writes everything currently on screen into `src/defaults.json`, so it becomes the starting point for anyone who opens the page — including a production build, which bakes the file in. It asks to confirm first, keeps the previous file as `src/defaults.prev.json` (copy it back to undo one save), clears your local tweaks (they now *are* the defaults) and reloads. It's only offered on the dev server, which is what writes the file. **Reset all** clears your local tweaks back to the saved defaults; to get back to the built-in values, set `src/defaults.json` to `{}`.
 
 Images are saved by name (`img-01`), not URL, because a build renames them with a content hash.
 
@@ -41,10 +41,10 @@ Images are saved by name (`img-01`), not URL, because a build renames them with 
 
 Every section's settings have a mobile layer, for phones and tablets. Below **1024 px** wide (`(max-width: 1023px)`) the page uses `{ ...settings, ...settings.mobile }`; at 1024 px and up it ignores `mobile`. (The small video copies, the nav's compact form and the panel's bottom sheet still go by phone width, below 768 px.) The switch is live — resize across it and the page re-lays itself out.
 
-- **Desktop | Mobile** at the top of the inspector picks which set you're editing. It starts on Mobile on a phone-width window. In Mobile, a control that has its own phone value is marked **phone · use desktop**; click that to drop the phone value and follow desktop again. Editing a value the current width isn't showing gets a hint saying so.
-- Starting phone values live next to each section's defaults (`OPEN_ROAD_MOBILE`, `TRAFFIC_MOBILE`, `PLATFORM_MOBILE`, `PAGE_MOBILE` in `main.js`): smaller type, text placed for a narrow screen, 7 lanes, the platform's text at the top with the platform centred below, grain held still, trails off. Saved phone values sit on top of them.
+- **Breakpoint: Desktop | Mobile** at the top of the panel picks both what the page shows and which set you're editing. Desktop gives the page all the room beside the panel; Mobile shows the same page at a phone's size (pick the size above it: iPhone 12–16, mini, Pro Max or iPad), so its media queries, 4-column grid and mobile settings all switch on, exactly as on a phone. It's one page in one frame, resized, so switching is instant and picking a section still scrolls it there. In Mobile, a control that has its own phone value is marked with a purple **Phone ×** chip; click it to drop the phone value and follow desktop again. In Desktop, a grey **Phone** chip says the phone version differs. Editing values the page isn't showing gets a notice saying so.
+- Starting phone values live next to each section's defaults (`OPEN_ROAD_MOBILE`, `TRAFFIC_MOBILE`, `PLATFORM_MOBILE`, `PAGE_MOBILE` in `page.js`): smaller type, text placed for a narrow screen, 7 lanes, the platform's text at the top with the platform centred below, grain held still, trails off. Saved phone values sit on top of them.
 - *Save as default* and the local autosave store `mobile` along with everything else.
-- On a phone the inspector starts hidden behind a **Controls** button and opens as a bottom sheet.
+- On a phone the page is the top window, as it will be live, and **Controls** opens the panel as a sheet over it.
 
 ### Stepping through the layers
 
@@ -81,7 +81,7 @@ Content (Figma "Desktop - 113 / 114"): a headline and three categories (Logistic
 - **Line reveals:** text gets the page's line reveal, and the wordmark rises from behind its own edge, each only once the footer has actually uncovered it.
 - **Colour wave:** the headline gets the colour wave (`src/colorWave.js`).
 - **Force field:** the wordmark's full stop is drawn as a grid of squares. Hovering near it pushes them apart, and springs pull them home.
-- **Back to top:** the button dispatches `page:top`, and `main.js` makes a quick cut: a fade out, a jump to the top, and a fade in. Its timings and colour are in the panel.
+- **Back to top:** the button dispatches `page:top`, and `page.js` makes a quick cut: a fade out, a jump to the top, and a fade in. Its timings and colour are in the panel.
 
 ### Cursor lens
 
@@ -129,7 +129,7 @@ The platform's **Explore** buttons open a modal (`src/modal.js`), after pda.arch
   - Uploads are saved in `src/assets/modal/` (a video's poster in `modal/posters/`) and the page reloads with them. Settings refer to a file by its name. Each gets a lighter copy automatically: images at most 2400 px (never enlarged), videos as desktop and phone MP4s in `src/assets/optimized/modal/`.
   - Edits show live while the modal is open.
 
-The beat only fires a `plat:explore` event; `main.js` opens the modal with the platform's current settings.
+The beat only fires a `plat:explore` event; `page.js` opens the modal with the platform's current settings.
 
 ### Open road on phones
 
@@ -138,12 +138,6 @@ The hero can start in a set shape (Open road → Layout → **Hero shape**). Pho
 ### Nav
 
 The header is ridealso.com's (Figma: Brand Campaign › Main Nav), in `index.html` with its looks in `style.css` and behaviour in `src/nav.js`. At the top of the page it's clear. Scrolling down tucks it away, and scrolling up brings it back as a white card with the ink border and purple drop shadow (the Figma "Midscroll peek"), timed like the live site: 0.35 s. Below 1024 px it shows the logo, cart and menu, as the live site does. Icons are the Figma exports in `src/assets/nav/`. The type is Serial C Heavy, a commercial face: a local copy in `src/assets/fonts/` for the prototype, under the same licence caveat as ABC Camera. The links are placeholders.
-
-### Phone preview
-
-**Preview** (or P), next to Desktop / Mobile in the panel, shows the page at phone size in the space left of the panel, so the controls never cover it. Pick the size above it: iPhone 12–16, mini, Pro Max or iPad. It's the page itself loaded again in a frame (`?embed`), so it gets a real phone-width viewport: media queries, the 4-column grid and the mobile settings all switch on, just as they do on a phone. Turning it on switches the panel to Mobile. Edits, the grid and wireframe show in it as you make them, and picking a section scrolls it there.
-
-Edits also sync between any open windows of the page (through localStorage's `storage` event). So a narrow browser window with its panel hidden, beside a wide one with the panel open, works too.
 
 ### Traffic round the text
 
@@ -194,16 +188,24 @@ Endpoints get clamped into the viewport, so the tile can never fly between two i
 
 ```
 src/
-  main.js                 boot: Lenis, GSAP, director, editor
+  main.js                 decides what this document is: the page, or the editor around it
+  page.js                 the page: Lenis, GSAP, director, beats, modal, nav
   director.js             the sequence — beats, scroll ranges, seams
   beats/
     open-road.js          Beat 1
     traffic.js            Beat 2 — the hero slipping through traffic
     platform.js           Beat 3 — the isometric platform (three.js)
-  editor/
-    inspector.js          click a beat → its controls
-    schema.js             per-beat control schemas
-    store.js              autosave + config import/export
+  editor/                 prototype tooling (none of it in `npm run build:site`)
+    schema.js             per-section control schemas
+    store.js              autosave, view settings, config import/export
+    host.js               the page's side of the panel (window.__editorHost)
+    upload.js             video and media uploads
+    panel/                the settings panel: React + HeroUI v3 + Tailwind v4
+      shell.jsx           desktop: the page frame (full or phone size) + docked panel
+      sheet.jsx           phone: the panel as a sheet over the page
+      Panel.jsx           header, tabs, accordions, search, footer
+      controls.jsx        one HeroUI control per schema type
+      panel.css           HeroUI dark theme, ALSO purple accent
 ```
 
 ## The beats
@@ -214,7 +216,7 @@ src/
 
 **Beat 2 — Traffic.** (`beats/traffic.js`) Open road's square becomes the *hero* (the beat reads Open road's square, its picture and `seamHold` through `handedBy()`, a director hook for a seam's incoming beat) and settles into its own lane, fixed in height on screen — it travels with the reader. Around it, lanes of *cars* (image tiles; flat grey in wireframe) head down the page slower than the page scrolls, so they drift up the screen as the hero overtakes them. Three lines of text sit in the road like obstacles: lanes squeeze into the gaps beside each line (the road is remapped, never crossed, so cars keep their order), and along the road cars are spaced by a density that rises above and through each line — they bunch up and crawl there. **Hero colour.** Set in Open road → *Hero colour*. The square takes on the colour as the image resolves into it — over *Comes in from* → *Fully coloured by*, shares of Open road's move (0 = the full-width hero, 1 = the finished square), as a layer over the picture (`.road__tint`) — so it leaves for Traffic already coloured. As the colour starts, the video holds its frame (and plays on if you scroll back above that point), and the held frame blurs up to *Blur* px as the colour comes in (the picture is in its own `.road__media` layer, scaled up a touch with the blur so its edges stay solid). Once fully coloured the picture isn't drawn at all, and the colour layer overlaps the square's edges by a pixel (as does the handoff tile's), so no sub-pixel sliver of the frame can show. Open road's exit anchor reports that colour (`tint`), and the handoff tile and Traffic's hero carry it on unchanged; docking then turns it to the dot colour. Traffic's *Hero's colour* option for the traffic follows the same setting. (It used to live in Traffic, applied after the release; a colour saved there is carried over.)
 
-**What the traffic is made of.** Each piece is filled with an image from **`src/assets/traffic/`** or one of the *Colours* (Traffic → Traffic → *Fill: images & colours*). The folder is globbed by `main.js`, so adding or removing files there makes the page reload with them — any jpg, png, webp, gif or avif; the panel shows how many it found. *Colour vs images* sets the share of pieces that are colour (0 = all images, 1 = all colour); which pieces those are is seeded per piece, so the mix is stable between loads. *Colours* is an editable list (add, remove, a hex each), used in equal amounts. With no images everything is colour, and vice versa. In wireframe, images go grey and colour fills keep their colour. (The folder started as copies of the 14 samples in `src/assets/images/`, which Open road's picture grid still uses.)
+**What the traffic is made of.** Each piece is filled with an image from **`src/assets/traffic/`** or one of the *Colours* (Traffic → Traffic → *Fill: images & colours*). The folder is globbed by `page.js`, so adding or removing files there makes the page reload with them — any jpg, png, webp, gif or avif; the panel shows how many it found. *Colour vs images* sets the share of pieces that are colour (0 = all images, 1 = all colour); which pieces those are is seeded per piece, so the mix is stable between loads. *Colours* is an editable list (add, remove, a hex each), used in equal amounts. With no images everything is colour, and vice versa. In wireframe, images go grey and colour fills keep their colour. (The folder started as copies of the 14 samples in `src/assets/images/`, which Open road's picture grid still uses.)
 
 **The traffic's shape.** Measured along the way to "Start small" (0 = the top of this section, 1 = the gap): the traffic starts *Size at the top* × bigger — packed and congested — shrinks to the hero's own size and shape between *Shrinks from* and *Hero-sized by*, then funnels into the gap between "Start" and "small" between *Funnels from* and *In the gap by*, fading as it arrives (*Road clears over*). Between *Starts turning at* and *Fully turned by* it also takes on a colour — the hero's own (*Hero's colour*, so changing the hero's colour changes it too) or *Its own* hex — laid over the pictures in each car's style, so trail echoes carry it; in wireframe the colour still shows over the grey. While funnelling, cars stop making room for the hero: they're flowing into its space.
 
@@ -230,7 +232,7 @@ src/
 
 **Motion trail.** (`src/trail.js`) Every section has a *Motion trail* toggle with Echoes, Stagger (ms), Opacity, Falloff and Blur. It's a time-based echo, like video feedback: each section registers its moving images and dots (never text) — Open road's hero and the handoff tile, Traffic's hero and cars — and every frame the trail records each element's inline style, then shows `trailCount` copies of it as it was `trailStagger`, 2 × `trailStagger`, … ms ago, each fainter (`× (1 − falloff)`) and more blurred than the last. Scroll fast and it stretches; stop and it catches up and disappears. An echo identical to the live element is hidden, so nothing at rest gets a halo. Canvases are echoed by copying their pixels. Off by default and for reduced motion.
 
-**Scrolling.** The page has one smoothing setting and one speed setting, both in the inspector's **Page** settings, both applied to the single Lenis instance. Every beat is a pure function of scroll progress, so every beat feels exactly the same glide.
+**Scrolling.** The page has one smoothing setting and one speed setting, both in the panel's **Page** settings, both applied to the single Lenis instance. Every beat is a pure function of scroll progress, so every beat feels exactly the same glide.
 
 **Grain and warmth.** A page-level analog finish (`src/grain.js`), tuned in the Page settings. *Warmth* is a flat tint multiplied over the page, so whites become warm paper and blacks stay black. *Grain* is a seeded noise tile, centred on mid-grey so it adds texture without shifting brightness, repeated across a fixed layer and blended over everything; it jumps to a new random offset `grainSpeed` times a second (a GPU transform, so nothing repaints) and stops for reduced motion. Both sit above every beat and the nav, below the editor, and are separate elements in `<body>` because `mix-blend-mode` only blends within its stacking context. Controls: Grain on/off, Amount, Size, Softness, Motion (fps), Colour noise, Blend; Warmth Amount and Tint.
 

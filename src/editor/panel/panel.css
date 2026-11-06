@@ -1,0 +1,30 @@
+/* The settings panel: HeroUI v3 (Tailwind v4) in its dark theme, with ALSO's
+   purple as the one accent. Only ever loaded in the panel's own document
+   (the editor shell, or the phone sheet), never in the page: Tailwind's
+   base styles reset the whole document they're in. */
+
+@import "@heroui/styles";
+
+@layer theme {
+  :root, .dark, [data-theme="dark"] {
+    /* ALSO purple (#AC74FC). Near-black text on it reads at 6.2:1, where
+       white is 3.2:1; on the panel's dark surfaces it's 5.4:1. */
+    --accent: oklch(0.677 0.1965 300.21);
+    --accent-foreground: oklch(0.1595 0 0);
+    --focus: var(--accent);
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Values are numbers that change as you drag: keep them from jittering. */
+  .tabular { font-variant-numeric: tabular-nums; }
+}
