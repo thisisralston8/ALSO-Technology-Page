@@ -193,7 +193,7 @@
     "startParallax": 0.26,
     "startSpeed": 0.1,
     "mobile": {
-      "startSizePx": 92,
+      "startSizePx": 94,
       "blurbSize": 32,
       "blurb1Col": 1,
       "blurb1Span": 3,
@@ -233,12 +233,12 @@
       "shrinkTo": 0.845,
       "laneWanderLength": 1.1,
       "flowSoft": 0.5,
-      "nightGap": -26,
+      "nightGap": -23,
       "slotLift": 0.4,
       "startSize": 0.4,
       "slotWidth": 10,
       "startGap": 1.02,
-      "startParallaxPx": 226,
+      "startParallaxPx": 70,
       "dockLead": 0.6
     },
     "startSize": 0.262
