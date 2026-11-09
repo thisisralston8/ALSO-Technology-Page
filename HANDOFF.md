@@ -11,6 +11,12 @@ This note is for the engineers doing that. It covers:
 
 `README.md` describes every section in detail. `AGENTS.md` lists the architecture rules the code follows; read it before changing a beat.
 
+## Getting the code
+
+- **Repo:** https://github.com/thisisralston8/ALSO-Technology-Page (public, branch `main`).
+- **Or without git:** the prototype's settings panel has a **Download** button (bottom row, next to Copy / Paste config). It downloads the latest push to `main` as a .zip into the browser's Downloads folder. It's whatever was last pushed, so local commits that haven't been pushed aren't in it.
+- **Live prototype:** https://also-technology-page.vercel.app (with the settings panel).
+
 ## TL;DR
 
 ```
@@ -50,7 +56,17 @@ npm run build:site   # the page as it should ship: no panel, settings baked in �
 - the colour wave on "Start small" and the footer headline;
 - the platform's drift and cursor lens;
 - the verticals' dot cursor;
-- the careers pixel trail.
+- the careers pixel trail;
+- Traffic's cursor push.
+
+**Traffic's cursor push.** Hovering over the traffic pushes nearby pieces aside, and they spring back (`push*` settings in `traffic.js`). It's an offset drawn on top of where scroll puts each piece, so it never changes the road. It's for hovering only:
+
+- While the page scrolls, the cursor is ignored, and anything already pushed springs home. The cursor counts again once it moves, 150 ms after the scroll stops.
+- Each frame touches only the pieces near the cursor and those still settling, never the whole road, and the loop sleeps when everything is at rest.
+- The pointer handler only records the event. The stage is measured once a frame, before any writes.
+- It's mouse and pen only, and it's off with reduced motion.
+
+**Traffic round the text.** Each lane decides once per line of text which way to go round it, and keeps that decision (`route()` in `traffic.js`). It goes round on its nearer side, squeezes in if it has to, and only crosses to the far side when its own side has no room at all. Don't make that decision per frame or per y: when it was decided afresh at every point, the choice flipped partway at some widths and lanes jumped across the text.
 
 **Hand-offs between sections.** Some sections pass an element or a picture to the next one, and the director wires these up:
 
@@ -117,8 +133,10 @@ All measured at 1440×866 in Chrome.
 
 | Build | Main script | Panel (loaded after the page runs) | three.js (when the platform approaches) |
 |---|---|---|---|
-| Prototype (`npm run build`) | 280 (104) | 77 (20) | 471 (117) |
-| `build:site` | 276 (102) | none | 471 (117) |
+| Prototype (`npm run build`) | 267 (99) | 716 JS (216) + 477 CSS (45) | 471 (117) |
+| `build:site` | 273 (101) | none | 471 (117) |
+
+The panel (React, HeroUI, Tailwind) is the prototype's only heavy part, and `build:site` leaves all of it out.
 
 **Per-frame work while scrolling.** JavaScript per scroll update, by section:
 
@@ -140,6 +158,7 @@ The platform's WebGL draw is the main GPU cost. On phones it runs without antial
 
 - Don't let the theme add `will-change` or `contain: paint` to the page's containers. The traffic layer positions its pieces outside its own box, and `contain: paint` clips them.
 - Keep the sticky stages free of theme wrappers that set `overflow: hidden`, which breaks `position: sticky`.
+- Line reveals wrap each line in a mask with `overflow: clip`. With tight negative tracking, the last letter's ink runs past its box and gets cut. Platform verticals gives its masks room sideways (`.vert .rv-line-mask` in `style.css`), and any new tightly tracked text needs the same.
 
 ## Testing checklist
 
@@ -151,8 +170,11 @@ The platform's WebGL draw is the main GPU cost. On phones it runs without antial
   - Verticals → Careers (the cursor hands back)
   - Careers → Footer
 - Platform layers: one swipe or wheel flick moves exactly one layer. Explore opens the modal from the button, the layer switcher cuts between layers, and close returns to the right layer.
+- Traffic at several desktop widths (1024, 1040, 1200, 1300, 1440): no piece should jump sideways as it goes round a line of text.
+- Traffic's cursor push: hovering pushes pieces aside and they spring back. Scrolling with the cursor over the traffic pushes nothing.
+- Platform verticals: "Logistics", "Quick commerce" and "Passenger" show their last letter in full.
 - Footer: back-to-top fades out, jumps to the top, and fades back in.
-- Reduced motion: grain, trails and the colour wave settle to still frames.
+- Reduced motion: grain, trails and the colour wave settle to still frames, and Traffic's cursor push is off.
 - Handy in the console:
   - `__page.director.byId('traffic').api.seek(0.4)`
   - `__page.director.beats.map(b => [b.def.id, b.trigger.progress])`
@@ -162,4 +184,4 @@ The platform's WebGL draw is the main GPU cost. On phones it runs without antial
 - **Traffic per-frame cost:** Traffic is the heaviest section to scroll. About 0.5 ms a frame is fine on a laptop. It's worth profiling on a mid-range Android phone.
 - **Duplicate media:** `src/assets/modal` has two byte-identical 53 MB videos (`slice-squares-20261104165229` and `…-2`), and only `…-2` is used. Several traffic images have `(1)` / `(2)` copies of the same name; they aren't identical files, but check with design which are meant to be there.
 - **Footer link columns:** the two link columns from an earlier frame are still in `footer.js`, hidden by default. Delete them if design confirms they're gone.
-- **Pointer listeners:** the verticals' cursor and the careers trail listen to the pointer across the whole page. They're cheap, but on Shopify you may prefer to attach them only while their section is on screen.
+- **Pointer listeners:** the verticals' cursor, the careers trail and Traffic's cursor push listen to the pointer across the whole page. They're cheap (Traffic's returns at once unless its section is on screen and the page isn't scrolling), but on Shopify you may prefer to attach them only while their section is on screen.
