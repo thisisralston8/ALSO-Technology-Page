@@ -699,7 +699,7 @@
     "ruleThickness": 1,
     "ruleDraw": "on",
     "rowHover": "on",
-    "rowFill": "#FFFFFF",
+    "rowFill": "#fcf5ed",
     "rowWipe": 0.12,
     "rowArrow": "on",
     "rowArrowSize": 0.8,

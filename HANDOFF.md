@@ -56,7 +56,7 @@ npm run build:site   # the page as it should ship: no panel, settings baked in â
 - the colour wave on "Start small" and the footer headline;
 - the platform's drift and cursor lens;
 - the verticals' dot cursor;
-- the careers pixel trail;
+- the careers pixel trail, and the wipe on its partner rows;
 - Traffic's cursor push.
 
 **Traffic's cursor push.** Hovering over the traffic pushes nearby pieces aside, and they spring back (`push*` settings in `traffic.js`). It's an offset drawn on top of where scroll puts each piece, so it never changes the road. It's for hovering only:
@@ -67,6 +67,8 @@ npm run build:site   # the page as it should ship: no panel, settings baked in â
 - It's mouse and pen only, and it's off with reduced motion.
 
 **Traffic round the text.** Each lane decides once per line of text which way to go round it, and keeps that decision (`route()` in `traffic.js`). It goes round on its nearer side, squeezes in if it has to, and only crosses to the far side when its own side has no room at all. Don't make that decision per frame or per y: when it was decided afresh at every point, the choice flipped partway at some widths and lanes jumped across the text.
+
+**Partner rows (Investors and careers).** The row under the cursor fills white, wiping up from its rule, and an arrow at its right is revealed by the same edge (`row*` settings in `careers.js`). Keyboard focus on a row does the same. The fills are their own layer, between the section and the trail canvas, so trail squares crossing a fill are drawn again in the section colour, clipped to it, while the names stay on top. Each partner can have a link: `partners` items are `{ text, url }` (plain strings still work), and a row with a link becomes an `<a>` that opens in a new tab. Rows with no link still fill and show the arrow, so give every partner a URL before launch, or hide the arrow for rows without one. Phones get no hover, but the links work.
 
 **Hand-offs between sections.** Some sections pass an element or a picture to the next one, and the director wires these up:
 
@@ -172,6 +174,7 @@ The platform's WebGL draw is the main GPU cost. On phones it runs without antial
 - Platform layers: one swipe or wheel flick moves exactly one layer. Explore opens the modal from the button, the layer switcher cuts between layers, and close returns to the right layer.
 - Traffic at several desktop widths (1024, 1040, 1200, 1300, 1440): no piece should jump sideways as it goes round a line of text.
 - Traffic's cursor push: hovering pushes pieces aside and they spring back. Scrolling with the cursor over the traffic pushes nothing.
+- Partner rows: hovering fills each row white from its rule up, with the arrow; the trail over a fill turns purple; moving between rows hands the fill over; scrolling under a still cursor moves it to the row now under it; Tab through the rows and each focused row fills; a row with a link opens it in a new tab.
 - Platform verticals: "Logistics", "Quick commerce" and "Passenger" show their last letter in full.
 - Footer: back-to-top fades out, jumps to the top, and fades back in.
 - Reduced motion: grain, trails and the colour wave settle to still frames, and Traffic's cursor push is off.
@@ -184,4 +187,4 @@ The platform's WebGL draw is the main GPU cost. On phones it runs without antial
 - **Traffic per-frame cost:** Traffic is the heaviest section to scroll. About 0.5 ms a frame is fine on a laptop. It's worth profiling on a mid-range Android phone.
 - **Duplicate media:** `src/assets/modal` has two byte-identical 53 MB videos (`slice-squares-20261104165229` and `â€¦-2`), and only `â€¦-2` is used. Several traffic images have `(1)` / `(2)` copies of the same name; they aren't identical files, but check with design which are meant to be there.
 - **Footer link columns:** the two link columns from an earlier frame are still in `footer.js`, hidden by default. Delete them if design confirms they're gone.
-- **Pointer listeners:** the verticals' cursor, the careers trail and Traffic's cursor push listen to the pointer across the whole page. They're cheap (Traffic's returns at once unless its section is on screen and the page isn't scrolling), but on Shopify you may prefer to attach them only while their section is on screen.
+- **Pointer listeners:** the verticals' cursor, the careers trail (and its row hover) and Traffic's cursor push listen to the pointer across the whole page. They're cheap (Traffic's returns at once unless its section is on screen and the page isn't scrolling), but on Shopify you may prefer to attach them only while their section is on screen.
