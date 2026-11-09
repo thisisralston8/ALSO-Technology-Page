@@ -23,7 +23,16 @@
      hero     held in the centre of the screen (it moves with the reader).
               The road always has a clear path down it for the hero, and the
               traffic flows either side and never crosses it: the hero slips
-              through the congestion without disturbing anything. */
+              through the congestion without disturbing anything.
+
+   The one exception (like the platform's cursor lens and the trails): the
+   cursor pushes the traffic (`push*`). Each car carries a small offset on top
+   of where scroll puts it; the cursor pushes it away (and, with `pushDrag`,
+   drags it along with its own movement) and a damped spring pulls it home.
+   That runs on time, only while the cursor is moving over the traffic or
+   something is still settling, and never changes the road itself. While the
+   page scrolls there's no push at all: pieces already pushed spring home
+   and the cursor is ignored until it moves again. */
 
 import { createTrail, TRAIL_DEFAULTS } from '../trail.js';
 import { paintCover } from '../cover.js';
@@ -349,61 +358,87 @@ export function createTraffic(el, config) {
      place across its side, a gentle wander, then steered round any line of
      text — never into the hero's path, never into the text's clearance.
 
-     Round a line of text, a lane first looks for room on screen beside it
-     on its own side (traffic bunches and narrows round the words). Where the
-     text leaves no room on screen — on a phone a line can fill its whole
-     side — the side reaches past the screen edge by up to `flowOffscreen`
-     screen widths, and the lane snakes out round the text's outer edge,
-     off screen, and back on below it. The clearance (`flowPad`) is kept
-     either way. */
+     Which way a lane goes round a line of text is decided once, for that
+     lane and that line (`route`), and kept: deciding it afresh at every y
+     let the choice flip partway (the road's edges move a little while the
+     hero settles), and the lane jumped across the text in one frame. A lane
+     goes round on its nearer side: the lanes left of the text's middle go
+     left, the rest right. Its side counts as having room if there's
+     `min` px on screen beside the text; failing that, past the screen edge
+     by up to `flowOffscreen` screen widths (the outer side only — the inner
+     edge is the hero's path); failing that, if a squeezed car still fits on
+     screen. Only when its own side has no room at all does a lane cross to
+     the other side. The clearance (`flowPad`) is kept either way. */
   // How far (0–1) the last laneX call was going round text off screen: the
   // closing formation waits for that, so it never pulls a car back through
   // the words.
   let offK = 0;
-  function laneX(lane, y, w) {
-    const { W, H } = geo;
-    offK = 0;
-    const half = clearHalf(Math.max(cfg.heroSize, heroSizeAtPage(y)));
+  const ROOM = 40;
+  const routes = new Map();
+  function route(lane, bi, bx) {
+    const key = lane.i * 64 + bi;
+    if (routes.has(key)) return routes.get(key);
+    const { W } = geo;
+    // The road's edges where the line is (fixed for this line).
+    const half = clearHalf(Math.max(cfg.heroSize, heroSizeAtPage((bx.top + bx.bottom) / 2)));
     const { a, b } = sides(half)[lane.side];
-    // The side's outer edge, pushed past the screen: left for the left side,
-    // right for the right. The inner edge is the hero's path and never moves.
     const off = Math.max(0, cfg.flowOffscreen) * W;
     const ea = lane.side === 0 ? Math.min(a, -off) : a;
     const eb = lane.side === 1 ? Math.max(b, W + off) : b;
+    let r = null;
+    if (!(bx.right <= ea || bx.left >= eb)) {
+      const fit = lane.w * cfg.carScaleTop + 4;
+      const lOn = Math.max(a, bx.left), rOn = Math.min(b, bx.right);
+      const lOff = Math.max(ea, bx.left), rOff = Math.min(eb, bx.right);
+      // The room on each side of the text, best first.
+      const pick = (opts) => opts.find((o) => o.ok) || null;
+      const left = pick([
+        { ok: lOn - a >= ROOM, A: a, B: lOn, off: false },
+        { ok: ea < a && lOff - ea >= ROOM, A: ea, B: lOff, off: true },
+        { ok: lOn - a >= fit, A: a, B: lOn, off: false },
+        { ok: ea < a && lOff - ea >= fit, A: ea, B: lOff, off: true },
+      ]);
+      const right = pick([
+        { ok: b - rOn >= ROOM, A: rOn, B: b, off: false },
+        { ok: eb > b && eb - rOff >= ROOM, A: rOff, B: eb, off: true },
+        { ok: b - rOn >= fit, A: rOn, B: b, off: false },
+        { ok: eb > b && eb - rOff >= fit, A: rOff, B: eb, off: true },
+      ]);
+      const u = lane.u;
+      // The text's middle, as a place across this side: lanes left of it go left.
+      const sp = clamp01(((lOn + rOn) / 2 - a) / (b - a || 1));
+      let m = null, R = null;
+      if (left && right) {
+        if (u < sp) { R = left; m = R.A + (u / (sp || 1)) * (R.B - R.A); }
+        else { R = right; m = R.A + ((u - sp) / ((1 - sp) || 1)) * (R.B - R.A); }
+      } else if (left || right) {
+        R = left || right; m = R.A + u * (R.B - R.A);
+      }
+      if (R) r = { m, off: R.off, lo: R.off ? ea : a, hi: R.off ? eb : b };
+    }
+    routes.set(key, r);
+    return r;
+  }
+
+  function laneX(lane, y, w) {
+    const { H } = geo;
+    offK = 0;
+    const half = clearHalf(Math.max(cfg.heroSize, heroSizeAtPage(y)));
+    const { a, b } = sides(half)[lane.side];
     const u = lane.u;
     let x = a + u * (b - a);
     if (cfg.laneWander) x += cfg.laneWander * Math.sin((y / Math.max(1, cfg.laneWanderLength * H)) * Math.PI * 2 + lane.phase);
     let lo = a, hi = b;
-    const soft = cfg.flowSoft * H, min = 40;
-    for (const bx of geo.boxes) {
-      if (bx.right <= ea || bx.left >= eb) continue;        // not on this side
+    const soft = cfg.flowSoft * H;
+    geo.boxes.forEach((bx, bi) => {
       const k = smooth(bx.top - soft, bx.top, y) * (1 - smooth(bx.bottom, bx.bottom + soft, y));
-      if (k <= 0) continue;
-      // Room either side of the text: on screen first…
-      let A = a, B = b;
-      let l = Math.max(A, bx.left), r = Math.min(B, bx.right);
-      if (l - A < min && B - r < min) {
-        // …and if there's none, past the screen edge.
-        A = ea; B = eb;
-        l = Math.max(A, bx.left); r = Math.min(B, bx.right);
-        if (A < a || B > b) offK = Math.max(offK, k);
-      }
-      const Lw = l - A, Rw = B - r;
-      if (Lw < min && Rw < min) continue;                   // nowhere to go even off screen
-      let m;
-      if (Lw < min) m = r + u * Rw;
-      else if (Rw < min) m = A + u * Lw;
-      else {
-        // Room both sides: lanes split at the text's middle, each going
-        // wholly one way. (A lane's place across, `u`, never changes, so
-        // there's no jump; blending at the split would steer the lanes right
-        // there into the middle of the words.)
-        const sp = clamp01(((l + r) / 2 - a) / (b - a || 1));
-        m = u < sp ? A + (u / (sp || 1)) * Lw : r + ((u - sp) / ((1 - sp) || 1)) * Rw;
-      }
-      x = lerp(x, m, k);
-      lo = Math.min(lo, A); hi = Math.max(hi, B);
-    }
+      if (k <= 0) return;
+      const r = route(lane, bi, bx);
+      if (!r) return;                                       // not on this side, or nowhere to go
+      if (r.off) offK = Math.max(offK, k);
+      x = lerp(x, r.m, k);
+      lo = Math.min(lo, r.lo); hi = Math.max(hi, r.hi);
+    });
     // Keep the whole car inside the room it's using: its side of the road,
     // plus the off-screen reach while it's going round text.
     return hi - lo > w ? Math.min(hi - w / 2, Math.max(lo + w / 2, x)) : (lo + hi) / 2;
@@ -447,6 +482,8 @@ export function createTraffic(el, config) {
         k++;
       }
     });
+    moved.clear();                       // every car starts back at home
+    routes.clear();                      // lanes decide afresh round the (new) text
     // Reuse elements where we can; the count changes with the layout.
     while (geo.cars.length > cars.length) { const c = geo.cars.pop(); trail.remove(c.el); c.el.remove(); }
     cars.forEach((c, i) => {
@@ -458,7 +495,7 @@ export function createTraffic(el, config) {
         old = geo.cars[i] = { el: e };
         trail.add(e);
       }
-      Object.assign(old, c, { shown: null, bgKey: '' });
+      Object.assign(old, c, { shown: null, bgKey: '', ox: 0, oy: 0, vx: 0, vy: 0, j: 1 + (rnd(i, 12) - 0.5) * 2 * cfg.pushJitter });
       // Wireframe greys out pictures; colour fills keep their colour.
       old.el.classList.toggle('is-photo', !!c.src);
       Object.assign(old.el.style, {
@@ -580,6 +617,7 @@ export function createTraffic(el, config) {
     const carColour = cfg.carColourSource === 'custom' ? cfg.carColour : heroColour();
     const clearTop = geo.gapY - cfg.clearRamp * H;
 
+    shownCars.length = 0;
     for (const c of geo.cars) {
       const q = c.q0 + c.lane.v * s;
       const y = yAt(((q % geo.Qspan) + geo.Qspan) % geo.Qspan);
@@ -594,7 +632,11 @@ export function createTraffic(el, config) {
       const cw = lerp(c.lane.w * cfg.carScaleTop, cfg.heroSize, shrink);
       const cl = lerp(c.len * cfg.carScaleTop, cfg.heroSize, shrink);
       const show = op > 0.002 && sy > -cl && sy < H + cl;
-      if (!show) { if (c.shown !== false) { c.el.style.visibility = 'hidden'; c.shown = false; } continue; }
+      if (!show) {
+        if (c.shown !== false) { c.el.style.visibility = 'hidden'; c.shown = false; if (c.ox || c.oy) { c.ox = c.oy = c.vx = c.vy = 0; moved.delete(c); } }
+        continue;
+      }
+      shownCars.push(c);
       let x = laneX(c.lane, y, cw);
       // The closing formation. Near the end the lanes gather in round the
       // hero into a tight, even band, each lane `endLaneGap` from the next
@@ -614,7 +656,8 @@ export function createTraffic(el, config) {
       const wpx = `${cw.toFixed(2)}px`, hpx = `${cl.toFixed(2)}px`;
       if (st.width !== wpx) st.width = wpx;
       if (st.height !== hpx) st.height = hpx;
-      st.transform = `translate3d(${(x - cw / 2).toFixed(2)}px, ${(y - cl / 2).toFixed(2)}px, 0)`;
+      c.cx = x; c.cy = y; c.cw = cw; c.cl = cl;
+      placeCar(c);
       st.opacity = c.op >= 0.999 ? '' : c.op.toFixed(3);
       // As the traffic becomes the hero's size and shape, it takes on a
       // colour too — the hero's, or its own — by the time it reaches the gap.
@@ -632,6 +675,8 @@ export function createTraffic(el, config) {
       }
       if (c.shown !== true) { st.visibility = ''; c.shown = true; }
     }
+
+    lastOff = off;
 
     // Hero.
     const ex = road?.anchor?.('exit');
@@ -673,6 +718,122 @@ export function createTraffic(el, config) {
     });
   }
 
+  /* ---------- the cursor's push ----------
+     A car's drawn place is where scroll puts it plus its offset (ox, oy).
+     Each frame, every car within `pushRadius` of the cursor is pushed
+     straight away from it, harder the closer it is, and dragged along with
+     the cursor's own movement (`pushDrag`); a damped spring always pulls the
+     offset back to zero. Mouse and pen only.
+
+     Kept cheap: the pointer handler only records the event (no layout
+     reads); the loop runs only while the cursor is moving over the traffic
+     or a car is still settling, and touches only the cars near the cursor
+     (from the cars on screen, which render already lists) and the ones
+     still away from home (`moved`) — never the whole road. One step per
+     frame (semi-implicit Euler is stable for these springs). */
+
+  let lastOff = 0;
+  const shownCars = [];                 // the cars on screen, from the last render
+  const moved = new Set();              // cars with an offset or still moving
+  const ptr = { cx: 0, cy: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, in: false, fresh: false };
+  const push = { raf: 0, last: 0, scrolledAt: -1e9 };
+  const SCROLL_IDLE = 150;              // ms after the last scroll before the cursor counts again
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const pushOn = () => cfg.push === 'on' && !reduced.matches;
+
+  function placeCar(c) {
+    const ox = c.ox || 0, oy = c.oy || 0;
+    const tilt = cfg.pushTilt && (ox || oy) ? cfg.pushTilt * Math.max(-1, Math.min(1, ox / Math.max(1, cfg.pushMax))) : 0;
+    c.el.style.transform = `translate3d(${(c.cx - c.cw / 2 + ox).toFixed(2)}px, ${(c.cy - c.cl / 2 + oy).toFixed(2)}px, 0)${tilt ? ` rotate(${tilt.toFixed(2)}deg)` : ''}`;
+  }
+
+  // Scrolling: the cursor stops counting until it moves again, and anything
+  // already pushed springs home.
+  function scrolled() {
+    push.scrolledAt = performance.now();
+    if (ptr.in) { ptr.in = false; ptr.vx = ptr.vy = 0; }
+    if (moved.size) runPush();
+  }
+
+  function onPointer(e) {
+    if (e.pointerType === 'touch' || !pushOn()) return;
+    const now = performance.now();
+    if (progress <= 0 || progress >= 1 || now - push.scrolledAt < SCROLL_IDLE) return;
+    // Velocity from client coords (the stage doesn't move while not scrolling).
+    if (ptr.in) {
+      const dt = Math.max(1, now - ptr.t) / 1000, a = Math.min(1, dt / 0.05);
+      ptr.vx += ((e.clientX - ptr.cx) / dt - ptr.vx) * a;
+      ptr.vy += ((e.clientY - ptr.cy) / dt - ptr.vy) * a;
+    } else { ptr.vx = ptr.vy = 0; }
+    ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.t = now;
+    ptr.in = true; ptr.fresh = true;
+    runPush();
+  }
+  function onPointerOut(e) { if (!e.relatedTarget && ptr.in) { ptr.in = false; runPush(); } }
+  addEventListener('pointermove', onPointer, { passive: true });
+  document.addEventListener('pointerout', onPointerOut);
+
+  function runPush() {
+    if (push.raf) return;
+    push.last = performance.now();
+    push.raf = requestAnimationFrame(stepPush);
+  }
+
+  function stepPush(now) {
+    push.raf = 0;
+    const dt = Math.min(1 / 30, Math.max(0.001, (now - push.last) / 1000));
+    push.last = now;
+    // Where the cursor is on the stage: read once a frame, here, before any
+    // writes (not in the pointer handler, where it could force a layout).
+    if (ptr.fresh) {
+      const r = view.getBoundingClientRect();
+      ptr.x = ptr.cx - r.left; ptr.y = ptr.cy - r.top;
+      if (ptr.x < 0 || ptr.y < 0 || ptr.x > r.width || ptr.y > r.height) ptr.in = false;
+      ptr.fresh = false;
+    }
+    const on = ptr.in && pushOn() && now - push.scrolledAt >= SCROLL_IDLE;
+    // The cursor's movement fades out once it stops.
+    if (now - ptr.t > 60) { const a = Math.exp(-dt / 0.06); ptr.vx *= a; ptr.vy *= a; }
+    const px = ptr.x, py = ptr.y + lastOff;                // content coords
+    const R = Math.max(1, cfg.pushRadius), R2 = R * R;
+    const w0 = 2 * Math.PI * Math.max(0.05, cfg.pushReturn), w02 = w0 * w0, zw = 2 * Math.max(0.05, cfg.pushDamping) * w0;
+    const force = 6000 * cfg.pushStrength, drag = 10 * cfg.pushDrag, max = Math.max(0, cfg.pushMax);
+    // Which cars: those within reach of the cursor, and those still away from home.
+    if (on) {
+      for (const c of shownCars) {
+        const dx = c.cx - px, dy = c.cy - py;
+        if (dx * dx + dy * dy < R2) moved.add(c);
+      }
+    }
+    let restless = false;
+    for (const c of moved) {
+      let ax = -w02 * c.ox - zw * c.vx;
+      let ay = -w02 * c.oy - zw * c.vy;
+      if (on) {
+        const dx = c.cx + c.ox - px, dy = c.cy + c.oy - py, d2 = dx * dx + dy * dy;
+        if (d2 < R2) {
+          const d = Math.sqrt(d2) || 0.001, f = 1 - d / R, k = f * f * c.j;
+          ax += (dx / d) * force * k + (ptr.vx - c.vx) * drag * k;
+          ay += (dy / d) * force * k + (ptr.vy - c.vy) * drag * k;
+        }
+      }
+      c.vx += ax * dt; c.vy += ay * dt;
+      c.ox += c.vx * dt; c.oy += c.vy * dt;
+      // Never further than `pushMax` from its place on the road.
+      const m2 = c.ox * c.ox + c.oy * c.oy;
+      if (m2 > max * max) { const k = max / Math.sqrt(m2); c.ox *= k; c.oy *= k; }
+      if (Math.abs(c.ox) < 0.05 && Math.abs(c.oy) < 0.05 && Math.abs(c.vx) + Math.abs(c.vy) < 1) {
+        c.ox = c.oy = c.vx = c.vy = 0;
+        moved.delete(c);
+      } else if (!on || Math.abs(c.vx) + Math.abs(c.vy) > 2) restless = true;
+      placeCar(c);
+    }
+    // Keep going while anything is still moving, or the cursor is (it may yet
+    // reach a car). Pieces held aside by a resting cursor are at rest: stop,
+    // and pick up again on the next move or scroll.
+    if (restless || (on && now - ptr.t < 100)) push.raf = requestAnimationFrame(stepPush);
+  }
+
   // Sized so the page moves 1:1: the slide-in (one screen), the scroll past
   // "Start small" until the dark fills the screen, and an optional hold.
   function naturalLength() {
@@ -697,7 +858,7 @@ export function createTraffic(el, config) {
   if (document.fonts) document.fonts.ready.then(() => { computeGeometry(); render(progress); });
 
   return {
-    seek(p) { progress = p; render(p); },
+    seek(p) { if (p !== progress) scrolled(); progress = p; render(p); },
     setConfig,
     relayout() { computeGeometry(); render(progress); },
     naturalLength,
@@ -728,7 +889,7 @@ export function createTraffic(el, config) {
     // The element that carries the hero in this beat (for the director, so it
     // can clear its echoes when the hero changes hands).
     trailTarget: () => hero,
-    destroy() { blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); wave.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
+    destroy() { if (push.raf) cancelAnimationFrame(push.raf); removeEventListener('pointermove', onPointer); document.removeEventListener('pointerout', onPointerOut); blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); wave.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
     get config() { return cfg; },
   };
 }
@@ -815,6 +976,17 @@ export const TRAFFIC_DEFAULTS = {
   fadeInFrom: 0,           // the road starts this far down the page (× screen height)…
   fadeInRamp: 0.7,         // …and fades in over this × screen height
   clearRamp: 0.7,          // the road clears before "Start small", over this × screen height
+
+  // The cursor's push (mouse and pen)
+  push: 'on',
+  pushRadius: 140,         // px, how far the cursor's push reaches
+  pushStrength: 1,         // how hard it pushes
+  pushDrag: 0.3,           // how much the cursor's movement drags cars along with it
+  pushMax: 60,             // px, the furthest a car is ever moved from its place
+  pushReturn: 1.6,         // how quickly cars spring back (≈ times a second)
+  pushDamping: 0.6,        // 0 = bouncy, 1 = settles without overshoot
+  pushTilt: 6,             // degrees a car turns as it's pushed sideways (0 = none)
+  pushJitter: 0.3,         // each car pushed a little differently (0 = all alike)
 
   bg: '#ffffff',
   fg: '#000000',

@@ -269,7 +269,11 @@ body {
    set tighter than its glyphs (112 px leading on 120 px type), so the masks
    get room below for descenders (g, Q) — taken back with a negative margin,
    so the layout doesn't move. */
-.vert .rv-line-mask { padding-bottom: 0.3em; margin-bottom: -0.3em; }
+/* Room past each line's box for the glyphs' ink: tight tracking pulls the
+   box in past the last letter, and the mask (overflow: clip) would cut it.
+   Sideways only — above and below, the mask still hides the rising line.
+   The negative margins keep the text exactly where it was. */
+.vert .rv-line-mask { padding: 0 0.12em 0.3em; margin: 0 -0.12em -0.3em; }
 /* Statistics under their categories (`statMode: 'under'`, phones). */
 .vert__note { display: none; max-width: 100%; }
 .vert--under .vert__note { display: block; }
