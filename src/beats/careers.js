@@ -21,7 +21,14 @@
    Solid colour, or sampled from the section's images. The squares belong to
    the section — they scroll with it. Time-based, like the cursor lens and
    the grain; it never touches layout, and its loop only runs while there
-   are squares to draw. Mouse and trackpad only. */
+   are squares to draw. Mouse and trackpad only.
+
+   A partner row under the cursor (or with keyboard focus) fills white,
+   wiping up from its rule, and shows an arrow at its right, revealed by the
+   same edge. The fills are their own layer under the trail, so the trail's
+   squares over a fill are drawn in the section's colour; the names stay on
+   top. The wipe runs on time (like the trail), never on scroll. A partner
+   with a link makes its row a link. */
 
 import { span as gridSpan } from '../grid.js';
 import { createLineReveal, revealAtTop, revealOptions } from '../lineReveal.js';
@@ -44,6 +51,7 @@ export const CAREERS_DEFAULTS = {
   invHeadCol: 4, invHeadSpan: 6, invHeadAlign: 'center',
   invHeadSize: 60, invHeadLeading: 56, invHeadTracking: -3,
   invGap: 120,             // px, headline to the list
+  // Each a name, or { text, url } for a row that links somewhere.
   partners: ['Rivian', 'Doordash', 'Eclipse', 'Prysm', 'Greenoaks'],
   listCol: 4, listSpan: 6,
   partnerSize: 32, partnerLeading: 36, partnerTracking: -1.5,
@@ -53,6 +61,13 @@ export const CAREERS_DEFAULTS = {
   ruleOpacity: 1,
   ruleThickness: 1,        // px
   ruleDraw: 'on',          // rules draw in from the left with the line reveal
+  // Hovered row: fills from its rule up (the trail over it turns `bg`)
+  rowHover: 'on',
+  rowFill: '#FFFFFF',
+  rowWipe: 0.3,            // s, the fill's wipe up (and back down)
+  rowArrow: 'on',
+  rowArrowSize: 0.8,       // × the names' size
+  rowArrowInset: 16,       // px, from the row's right end
   contactGap: 40,          // px, list to the contacts
   contact1Label: 'Investor Relations', contact1Email: 'ir@ridealso.com',
   contact2Label: 'Media Relations', contact2Email: 'media@ridealso.com',
@@ -156,7 +171,11 @@ export function createCareers(el, config) {
     return { label, link };
   });
   inv.append(invHead, list, contacts);
-  el.append(canvas, trailCanvas, title, inv);
+  // Row fills: under the trail, scrolling with the section.
+  const fillLayer = document.createElement('div');
+  fillLayer.className = 'pix__fills';
+  fillLayer.setAttribute('aria-hidden', 'true');
+  el.append(canvas, fillLayer, trailCanvas, title, inv);
   const tctx = trailCanvas.getContext('2d');
   const ctx = canvas.getContext('2d');
 
@@ -190,13 +209,14 @@ export function createCareers(el, config) {
     const base = el.getBoundingClientRect().top;
     reveals.forEach((x) => { x.off = x.e.getBoundingClientRect().top - base; });
     rules.forEach((x) => { x.off = x.e.getBoundingClientRect().top - base; });
+    placeFills();
     reveals.forEach((x) => x.r.split());
     applyReveals();
   }
 
   /* ---------- investors ---------- */
 
-  let rows = [];             // [{ name, rule }]
+  let rows = [];             // [{ row, name, rule, arrow, fill, k, box, clip }]
   let rowsKey = '';
   const rules = [];          // [{ e, off, drawn }]
   const reveals = [];        // [{ e, r, off }]
@@ -205,27 +225,40 @@ export function createCareers(el, config) {
 
   // The partner rows are rebuilt only when the list itself changes, so
   // editing anything else doesn't replay their reveals.
+  const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="miter" stroke-linecap="butt"><path d="M2.5 12h18M13 4.5l7.5 7.5-7.5 7.5"/></svg>';
+  const itemOf = (x) => (typeof x === 'string' ? { text: x, url: '' } : { text: x?.text ?? '', url: (x?.url ?? '').trim() });
   function buildRows() {
-    const names = Array.isArray(cfg.partners) ? cfg.partners : [];
-    const key = JSON.stringify(names);
+    const items = (Array.isArray(cfg.partners) ? cfg.partners : []).map(itemOf);
+    const key = JSON.stringify(items);
     if (key === rowsKey) return;
     rowsKey = key;
     reveals.splice(0).forEach((x) => { if (!fixedReveals.includes(x)) x.r.destroy(); });
     list.replaceChildren();
+    fillLayer.replaceChildren();
     rules.length = 0;
-    rows = names.map((n) => {
-      const row = document.createElement('div');
+    rows = items.map(({ text, url }) => {
+      // A row with a link is the link (a new tab); otherwise a plain row.
+      const row = document.createElement(url ? 'a' : 'div');
       row.className = 'pix__row';
+      if (url) { row.href = url; row.target = '_blank'; row.rel = 'noopener'; }
       const name = document.createElement('p');
       name.className = 'pix__name';
-      name.textContent = n;
+      name.textContent = text;
+      const arrow = document.createElement('span');
+      arrow.className = 'pix__arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.innerHTML = ARROW;
       const rule = document.createElement('div');
       rule.className = 'pix__rule';
-      row.append(name, rule);
+      row.append(name, arrow, rule);
       list.appendChild(row);
+      const fill = document.createElement('div');
+      fill.className = 'pix__fill';
+      fillLayer.appendChild(fill);
       rules.push({ e: rule, off: 0, drawn: false });
-      return { name, rule };
+      return { row, name, rule, arrow, fill, k: 0, box: null, clip: '' };
     });
+    hot = -1;
     reveals.push(...fixedReveals, ...rows.map(({ name }) => ({ e: name, r: createLineReveal(name), off: 0 })));
   }
 
@@ -239,8 +272,17 @@ export function createCareers(el, config) {
       fontSize: `${cfg.invHeadSize}px`, lineHeight: `${cfg.invHeadLeading}px`, letterSpacing: `${cfg.invHeadTracking}px`,
     });
     buildRows();
-    Object.assign(list.style, { marginLeft: `${l.x}px`, width: `${l.w}px`, marginTop: `${cfg.invGap}px`, gap: `${cfg.partnerGap}px` });
-    rows.forEach(({ name, rule }) => {
+    // Each row's box runs from the rule above (or the gap above the first)
+    // down to its own rule: that's what fills on hover.
+    Object.assign(list.style, { marginLeft: `${l.x}px`, width: `${l.w}px`, marginTop: `${Math.max(0, cfg.invGap - cfg.partnerGap)}px`, gap: '0px' });
+    const aSize = cfg.partnerSize * cfg.rowArrowSize;
+    rows.forEach(({ row, name, rule, arrow }) => {
+      row.style.paddingTop = `${cfg.partnerGap}px`;
+      Object.assign(arrow.style, {
+        width: `${aSize}px`, height: `${aSize}px`, right: `${cfg.rowArrowInset}px`,
+        top: `${cfg.partnerGap + (cfg.partnerLeading - aSize) / 2}px`,
+        display: cfg.rowHover === 'on' && cfg.rowArrow === 'on' ? '' : 'none',
+      });
       Object.assign(name.style, {
         fontSize: `${cfg.partnerSize}px`, lineHeight: `${cfg.partnerLeading}px`, letterSpacing: `${cfg.partnerTracking}px`,
         marginBottom: `${cfg.ruleGap}px`,
@@ -410,6 +452,7 @@ export function createCareers(el, config) {
   function onTrailMove(e) {
     if (e.pointerType && e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
     pointer.x = e.clientX; pointer.y = e.clientY; pointer.known = true;
+    rehit();
     if (!trailOn()) return;
     const r = el.getBoundingClientRect();
     const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
@@ -428,7 +471,76 @@ export function createCareers(el, config) {
     last = { x, y };
     run();
   }
-  function onTrailOut(e) { if (!e.relatedTarget) last = null; }
+  function onTrailOut(e) { if (!e.relatedTarget) { last = null; pointer.known = false; rehit(); } }
+
+  /* ---------- the hovered row ---------- */
+
+  let hot = -1;              // the row under the cursor (or focused), -1 for none
+  let focused = -1;
+  let lastT = 0;
+  const hoverOn = () => cfg.rowHover === 'on';
+  const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+
+  // Rows' boxes in section coords (measured with the layout; they scroll
+  // with the section, so on screen they're the section's top plus these).
+  function placeFills() {
+    const base = el.getBoundingClientRect();
+    rows.forEach((x) => {
+      const r = x.row.getBoundingClientRect();
+      x.box = { l: r.left - base.left, t: r.top - base.top, w: r.width, h: r.height };
+      Object.assign(x.fill.style, { left: `${x.box.l}px`, top: `${x.box.t}px`, width: `${x.box.w}px`, height: `${x.box.h}px`, background: cfg.rowFill });
+      x.arrowTop = x.arrow.offsetTop;
+    });
+    rows.forEach(applyRow);
+  }
+
+  // Which row the cursor is over, from the boxes (so it holds while the
+  // page scrolls under a still cursor, too).
+  function rehit() {
+    let i = -1;
+    if (hoverOn() && canHover.matches && pointer.known && !document.documentElement.classList.contains('xm-open')) {
+      const { top, left } = el.getBoundingClientRect();
+      i = rows.findIndex(({ box }) => box && pointer.x >= left + box.l && pointer.x <= left + box.l + box.w
+        && pointer.y >= top + box.t && pointer.y < top + box.t + box.h);
+    }
+    if (i < 0 && hoverOn()) i = focused;
+    if (i !== hot) { hot = i; lastT = 0; run(); }
+  }
+
+  // A row's fill and arrow at its k: the fill scaled up from its bottom,
+  // the arrow clipped to the part the fill has passed.
+  function applyRow(x) {
+    const e = ease(x.k);
+    x.fill.style.transform = `scaleY(${e})`;
+    x.fill.style.visibility = e > 0 ? 'visible' : 'hidden';
+    const edge = x.box ? x.box.h * (1 - e) : 0;   // the fill's top, from the row's
+    const cut = Math.min(100, Math.max(0, ((edge - x.arrowTop) / Math.max(1, x.arrow.offsetHeight || 1)) * 100));
+    const clip = e <= 0 ? 'inset(100% 0 0 0)' : `inset(${cut.toFixed(2)}% 0 0 0)`;
+    if (clip !== x.clip) { x.clip = clip; x.arrow.style.clipPath = clip; }
+  }
+
+  // Steps every row's k toward its target; true while any is moving.
+  function stepRows(t) {
+    const dt = lastT ? Math.min(0.1, t - lastT) : 1 / 60;
+    lastT = t;
+    const v = dt / Math.max(0.01, cfg.rowWipe);
+    let moving = false;
+    rows.forEach((x, i) => {
+      const goal = i === hot ? 1 : 0;
+      if (x.k === goal) return;
+      x.k = goal > x.k ? Math.min(goal, x.k + v) : Math.max(goal, x.k - v);
+      applyRow(x);
+      if (x.k !== goal) moving = true;
+    });
+    if (!moving) lastT = 0;
+    return moving;
+  }
+
+  // Keyboard: a focused row link counts as hovered.
+  function onFocusIn(e) { focused = rows.findIndex(({ row }) => row.contains(e.target)); rehit(); }
+  function onFocusOut() { focused = -1; rehit(); }
+  list.addEventListener('focusin', onFocusIn);
+  list.addEventListener('focusout', onFocusOut);
 
   function run() { if (!loop) loop = requestAnimationFrame(paint); }
 
@@ -455,6 +567,16 @@ export function createCareers(el, config) {
     }
     const t = now(), life = Math.max(0.01, cfg.trailLifetime), fade = Math.max(0, cfg.trailFade);
     const shrink = cfg.trailFadeStyle === 'shrink', k0 = Math.min(1, Math.max(0.05, cfg.trailPixScale));
+    const moving = stepRows(t);
+    // Where the fills are on screen now: squares over them take the
+    // section's colour (drawn again, clipped to them, below).
+    const over = [];
+    rows.forEach((x) => {
+      if (!x.box || x.k <= 0) return;
+      const e = ease(x.k), h = x.box.h * e;
+      over.push([r.left + x.box.l, r.top + x.box.t + x.box.h - h, x.box.w, h]);
+    });
+    const drawn = over.length ? [] : null;
     for (const [k, v] of cells) {
       const L = v.life ?? life;
       const age = t - v.t;
@@ -471,10 +593,22 @@ export function createCareers(el, config) {
       if (w < 1 || h < 1) continue;
       tctx.globalAlpha = shrink ? 1 : a;
       tctx.fillStyle = v.c;
-      tctx.fillRect(x0 + Math.round((cw - w) / 2), y0 + Math.round((ch - h) / 2), w, h);
+      const sx = x0 + Math.round((cw - w) / 2), sy = y0 + Math.round((ch - h) / 2);
+      tctx.fillRect(sx, sy, w, h);
+      drawn?.push(sx, sy, w, h, tctx.globalAlpha);
+    }
+    if (drawn?.length) {
+      tctx.beginPath();
+      over.forEach(([x, y, w, h]) => tctx.rect(x, y, w, h));
+      tctx.clip();
+      tctx.fillStyle = cfg.bg;
+      for (let i = 0; i < drawn.length; i += 5) {
+        tctx.globalAlpha = drawn[i + 4];
+        tctx.fillRect(drawn[i], drawn[i + 1], drawn[i + 2], drawn[i + 3]);
+      }
     }
     tctx.restore();
-    if (cells.size) run();
+    if (cells.size || moving) run();
   }
 
   addEventListener('pointermove', onTrailMove, { passive: true });
@@ -486,8 +620,8 @@ export function createCareers(el, config) {
 
   return {
     // Scrolling moves the squares with the section (and the grid with it).
-    seek(p) { progress = p; draw(); applyReveals(); if (cells.size || cfg.trailGrid === 'on') run(); },
-    setConfig(next) { cfg = next; layout(); run(); },
+    seek(p) { progress = p; draw(); applyReveals(); rehit(); if (cells.size || cfg.trailGrid === 'on') run(); },
+    setConfig(next) { cfg = next; layout(); rehit(); run(); },
     relayout() { layout(); },
     // Its section is exactly `height` screens tall.
     naturalLength() { return Math.max(1, cfg.height); },
@@ -498,6 +632,9 @@ export function createCareers(el, config) {
       removeEventListener('pointermove', onTrailMove);
       document.removeEventListener('pointerout', onTrailOut);
       removeEventListener('resize', sizeTrail);
+      list.removeEventListener('focusin', onFocusIn);
+      list.removeEventListener('focusout', onFocusOut);
+      fillLayer.remove();
       if (loop) cancelAnimationFrame(loop);
       trailCanvas.remove();
       reveals.forEach((x) => x.r.destroy());

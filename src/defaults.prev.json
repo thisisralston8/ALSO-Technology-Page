@@ -724,7 +724,7 @@
     "pixSeed": 24,
     "trail": "on",
     "trailMode": "color",
-    "trailColour": "#FCF5ED",
+    "trailColour": "#fcf5ed",
     "trailLighten": 20,
     "trailSize": 20,
     "trailRadius": 1,

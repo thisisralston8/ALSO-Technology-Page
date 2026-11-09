@@ -8,6 +8,8 @@
      colorlist         a list of colour pickers you can add to and remove from
      textarea          TextField + TextArea
      textlist          an ordered list of TextAreas: reorder, remove, add
+                       (`link: true`: each item also has a URL, and is stored
+                       as { text, url }; plain strings still read as text)
      image / video / media   thumbnail grids, with upload (and delete)
      svg               an uploaded icon, previewed, with a way back to the default
 
@@ -17,7 +19,7 @@
 import { useRef, useState } from 'react';
 import {
   Button, Chip, ColorArea, ColorField, ColorPicker, ColorSlider, ColorSwatch, Description,
-  ListBox, Select, Slider, TextArea, TextField, ToggleButton, ToggleButtonGroup, parseColor,
+  Input, ListBox, Select, Slider, TextArea, TextField, ToggleButton, ToggleButtonGroup, parseColor,
 } from '@heroui/react';
 import { cleanSvg } from '../../svgIcon.js';
 import { ArrowDown, ArrowUp, Close, Phone, Play, Plus, Trash, Upload } from './icons.jsx';
@@ -227,12 +229,16 @@ function TextControl({ api, row }) {
 
 function TextListControl({ api, row }) {
   const items = [...(api.read(row.p) || [])];
+  const textOf = (x) => (typeof x === 'string' ? x : x?.text ?? '');
+  const urlOf = (x) => (typeof x === 'string' ? '' : x?.url ?? '');
+  const make = (text, url) => (row.link ? { text, url } : text);
   const set = (a) => api.write(row.p, a);
+  const edit = (i, text, url) => { const a = [...items]; a[i] = make(text, url); set(a); };
   const move = (i, to) => { const a = [...items]; const [x] = a.splice(i, 1); a.splice(to, 0, x); set(a); };
   return (
     <Stack api={api} row={row}>
       <ol className="flex flex-col gap-3" aria-label={row.label}>
-        {items.map((text, i) => (
+        {items.map((item, i) => (
           <li key={i} className="flex flex-col gap-1 rounded-lg bg-surface-secondary p-2">
             <div className="flex items-center gap-1">
               <span className="tabular mr-auto pl-1 text-xs text-muted">{i + 1}</span>
@@ -241,13 +247,18 @@ function TextListControl({ api, row }) {
               <Button isIconOnly size="sm" variant="ghost" aria-label={`Remove item ${i + 1}`} isDisabled={items.length <= 1}
                 onPress={() => { const a = [...items]; a.splice(i, 1); set(a); }}><Close /></Button>
             </div>
-            <TextField aria-label={`${row.label} ${i + 1}`} value={text} onChange={(t) => { const a = [...items]; a[i] = t; set(a); }}>
-              <TextArea rows={3} spellCheck={false} className="resize-y text-sm" />
+            <TextField aria-label={`${row.label} ${i + 1}`} value={textOf(item)} onChange={(t) => edit(i, t, urlOf(item))}>
+              <TextArea rows={row.link ? 1 : 3} spellCheck={false} className="resize-y text-sm" />
             </TextField>
+            {row.link && (
+              <TextField aria-label={`${row.label} ${i + 1} link`} value={urlOf(item)} onChange={(u) => edit(i, textOf(item), u)}>
+                <Input type="url" placeholder="Link (https://…), optional" spellCheck={false} className="text-sm" />
+              </TextField>
+            )}
           </li>
         ))}
       </ol>
-      <Button size="sm" variant="secondary" className="self-start" onPress={() => set([...items, 'New blurb'])}>
+      <Button size="sm" variant="secondary" className="self-start" onPress={() => set([...items, make(row.newItem || 'New blurb', '')])}>
         <Plus /> {row.addLabel || 'Add'}
       </Button>
     </Stack>

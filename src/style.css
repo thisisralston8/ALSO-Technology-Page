@@ -318,6 +318,16 @@ html.has-vert-cursor body > :not(.insp, .insp__show, .phone-preview) * { cursor:
 .pix__list { display: flex; flex-direction: column; }
 .pix__name { margin: 0; font-weight: 400; white-space: nowrap; }
 .pix__rule { width: 100%; transform-origin: 0 50%; }
+/* A partner row: its box (gap above + name) is what fills on hover. The
+   fills are a layer of their own under the trail (careers.js); the arrow
+   sits at the row's right, clipped to the part the fill has reached. */
+.pix__row { position: relative; display: block; color: inherit; text-decoration: none; }
+a.pix__row { cursor: pointer; }
+a.pix__row:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.pix__arrow { position: absolute; display: block; pointer-events: none; clip-path: inset(100% 0 0 0); }
+.pix__arrow svg { display: block; width: 100%; height: 100%; }
+.pix__fills { position: absolute; inset: 0; pointer-events: none; }
+.pix__fill { position: absolute; transform-origin: 50% 100%; transform: scaleY(0); visibility: hidden; }
 .pix__contacts { display: flex; align-items: center; white-space: nowrap; }
 .pix__contact { display: flex; flex-direction: column; align-items: flex-start; }
 .pix__contact p { margin: 0; }
