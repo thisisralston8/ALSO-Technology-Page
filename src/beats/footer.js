@@ -21,13 +21,6 @@
    scroll): it dispatches `page:top` and main.js makes the quick cut — fade
    out, jump to the top, fade in — like the modal's layer switcher.
 
-   The wordmark's full stop is a force field (`field*`): it's drawn as a grid
-   of small squares that, at rest, make the solid dot. Hover near it and the
-   cursor pushes the squares apart — gaps open between them, showing what
-   it's made of, and they shift colour as they move — and when the cursor
-   leaves, springs pull them home into the dot again. Time-based, like the
-   cursor lens and the trails; its loop only runs while something moves.
-
    Pure function of progress, no smoothing of its own: the page's one
    smoothing (Lenis) is what makes it feel soft. */
 
@@ -39,8 +32,6 @@ import arrowUpUrl from '../assets/footer/arrow-up.svg?url';
 
 // The wordmark's own proportions (Figma: 1363.719 × 324.404 in a 1360 box).
 const LOGO_W = 1363.719, LOGO_H = 324.404, LOGO_BOX = 1360;
-// Its full stop, in the drawing's own units.
-const DOT = { x: 1278.87, y: 230.842, w: 84.85, h: 87.255 };
 
 export const FOOTER_DEFAULTS = {
   height: 1,               // screens
@@ -111,22 +102,6 @@ export const FOOTER_DEFAULTS = {
   topCutIn: 0.5,           // s, the top fading in
   topCutColour: '#0b0b0b', // what it fades through
 
-  // The full stop's force field
-  field: 'on',             // per breakpoint, like every setting (Desktop / Mobile)
-  fieldGrid: 10,           // squares across the dot
-  fieldRadius: 140,        // px, how far the cursor's push reaches
-  fieldForce: 0.4,         // how hard it pushes
-  fieldDisperse: 1,        // how quickly the squares fly apart (× their response)
-  fieldReturn: 1.6,        // how quickly they spring home (≈ times a second)
-  fieldDamping: 0.55,      // 0 = bouncy, 1 = settles without overshoot
-  fieldJitter: 0.4,        // each square pushed a little differently (0 = all alike)
-  fieldGap: 0.3,           // how far squares shrink on hover, opening the grid (× their size)
-  fieldHoverPad: 40,       // px around the dot that count as hovering it
-  fieldEase: 0.12,         // s, the hover coming on and off
-  fieldRestColour: '#ffffff',
-  fieldActiveColour: '#AC74FC',
-  fieldColourDist: 40,     // px a square moves to take on the active colour fully
-  fieldHoverTint: 0.25,    // how much of the active colour every square takes while hovered
 };
 
 export const FOOTER_MOBILE = {
@@ -205,8 +180,7 @@ export function createFooter(el, config) {
   // Bottom
   const logoMask = document.createElement('div');
   logoMask.className = 'foot__logomask';
-  // The wordmark, inline so its full stop can be swapped for the field. The
-  // reveal moves `logo`; the field canvas rides inside it.
+  // The wordmark, inline. The reveal moves `logo` inside its mask.
   const logo = document.createElement('div');
   logo.className = 'foot__logo';
   logo.setAttribute('role', 'img');
@@ -215,10 +189,6 @@ export function createFooter(el, config) {
   const svg = logo.querySelector('svg');
   svg.removeAttribute('width'); svg.removeAttribute('height');
   svg.setAttribute('aria-hidden', 'true');
-  const dotPath = [...svg.querySelectorAll('path')].find((p) => (p.getAttribute('d') || '').startsWith('M1278.87'));
-  const fieldCanvas = document.createElement('canvas');
-  fieldCanvas.className = 'foot__field';
-  logo.appendChild(fieldCanvas);
   logoMask.appendChild(logo);
   const legal = document.createElement('div');
   legal.className = 'foot__legal';
@@ -313,7 +283,6 @@ export function createFooter(el, config) {
       left: `${m}px`, width: `${lw}px`, height: `${lh}px`,
       bottom: `${cfg.legalBottom + cfg.legalLeading + cfg.logoGap}px`,
     });
-    layoutField(lw / LOGO_W);
     Object.assign(topBtn.style, {
       display: cfg.top === 'on' ? '' : 'none',
       right: `${m}px`, bottom: `${cfg.legalBottom + cfg.legalLeading + cfg.topGap}px`,
@@ -380,161 +349,7 @@ export function createFooter(el, config) {
       k = logoState.drawn ? 1 : 0;
     }
     logo.style.transform = `translateY(${((1 - k) * o.revealDistance).toFixed(2)}%)`;
-    // Once it's fully up, the mask stops clipping, so the field's squares
-    // can be pushed out past the wordmark's edge.
-    if (k < 1) logoMask.classList.remove('is-open');
-    else if (logo.style.transition === 'none' || o.revealMode === 'scrub' || cfg.logoReveal !== 'on') logoMask.classList.add('is-open');
   }
-  logo.addEventListener('transitionend', () => { if (logoState.drawn) logoMask.classList.add('is-open'); });
-
-  /* ---------- the full stop's force field ----------
-     Squares on a grid over the dot, each with a home, a position and a
-     velocity. While hovered, every square within `fieldRadius` of the
-     cursor is pushed straight away from it, harder the closer it is; a
-     damped spring always pulls it home. At rest, and with the hover off, it
-     draws one solid square instead — no seams, and the loop stops. */
-
-  const fctx = fieldCanvas.getContext('2d');
-  const fld = { s: 1, pad: 0, dot: null, parts: [], hover: 0, raf: 0, last: 0, w: 0, h: 0 };
-  const fpointer = { x: 0, y: 0, in: false };
-  const fieldOn = () => cfg.field === 'on' && cfg.logo === 'on';
-
-  function hashRnd(i) {
-    let h = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b);
-    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
-  }
-
-  // The dot's rect in the wordmark's CSS px, and the canvas around it —
-  // padded by the push's reach so squares have somewhere to go.
-  function layoutField(scale) {
-    dotPath && (dotPath.style.visibility = fieldOn() ? 'hidden' : '');
-    fieldCanvas.style.display = fieldOn() ? '' : 'none';
-    if (!fieldOn()) { stopField(); return; }
-    fld.s = scale;
-    const dot = { x: DOT.x * scale, y: DOT.y * scale, w: DOT.w * scale, h: DOT.h * scale };
-    const pad = Math.ceil(cfg.fieldRadius + 20);
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    fld.pad = pad; fld.dot = dot;
-    fld.w = dot.w + 2 * pad; fld.h = dot.h + 2 * pad;
-    fieldCanvas.width = Math.round(fld.w * dpr);
-    fieldCanvas.height = Math.round(fld.h * dpr);
-    Object.assign(fieldCanvas.style, { left: `${dot.x - pad}px`, top: `${dot.y - pad}px`, width: `${fld.w}px`, height: `${fld.h}px` });
-    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // The squares (rebuilt; they start at home).
-    const n = Math.max(2, Math.round(cfg.fieldGrid));
-    const rows = Math.max(2, Math.round(n * dot.h / dot.w));
-    const tw = dot.w / n, th = dot.h / rows;
-    fld.tile = { w: tw, h: th, n, rows };
-    fld.parts = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < n; c++) {
-        const hx = pad + c * tw, hy = pad + r * th;
-        fld.parts.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, j: 1 + (hashRnd(r * 997 + c) - 0.5) * 2 * cfg.fieldJitter });
-      }
-    }
-    drawField();
-  }
-
-  // Pointer: mouse and pen hover; a touch counts while the finger is down.
-  function onFieldPointer(e) {
-    // Nothing to measure until the footer is on screen (and nothing to settle).
-    if (!fieldOn() || (progress <= 0 && !fld.raf)) return;
-    if (e.pointerType === 'touch' && e.type === 'pointermove' && !e.buttons && e.pressure === 0) return;
-    fpointer.x = e.clientX; fpointer.y = e.clientY;
-    fpointer.in = !(e.type === 'pointerup' || e.type === 'pointercancel') || e.pointerType !== 'touch';
-    // Wake up when the cursor is anywhere near.
-    const r = fieldCanvas.getBoundingClientRect();
-    if (e.clientX > r.left - 40 && e.clientX < r.right + 40 && e.clientY > r.top - 40 && e.clientY < r.bottom + 40) runField();
-    else if (fld.hover > 0) runField();
-  }
-  function onFieldOut(e) { if (!e.relatedTarget) { fpointer.in = false; runField(); } }
-
-  function runField() {
-    if (fld.raf || !fieldOn()) return;
-    fld.last = performance.now();
-    fld.raf = requestAnimationFrame(stepField);
-  }
-  function stopField() { if (fld.raf) cancelAnimationFrame(fld.raf); fld.raf = 0; }
-
-  function stepField(now) {
-    fld.raf = 0;
-    const dt = Math.min(0.05, Math.max(0.001, (now - fld.last) / 1000));
-    fld.last = now;
-    const r = fieldCanvas.getBoundingClientRect();
-    const k = r.width / fld.w || 1;              // canvas px per CSS px (1 unless scaled)
-    const px = (fpointer.x - r.left) / k, py = (fpointer.y - r.top) / k;
-    const d = fld.dot, hp = cfg.fieldHoverPad;
-    const over = fpointer.in
-      && px >= fld.pad - hp && px <= fld.pad + d.w + hp && py >= fld.pad - hp && py <= fld.pad + d.h + hp;
-    // The hover itself comes and goes smoothly.
-    const a = 1 - Math.exp(-dt / Math.max(0.01, cfg.fieldEase));
-    fld.hover += ((over ? 1 : 0) - fld.hover) * a;
-    if (Math.abs(fld.hover - (over ? 1 : 0)) < 0.001) fld.hover = over ? 1 : 0;
-
-    const R = Math.max(1, cfg.fieldRadius);
-    const w0 = 2 * Math.PI * Math.max(0.05, cfg.fieldReturn);
-    const z = Math.max(0.05, cfg.fieldDamping);
-    const push = 9000 * cfg.fieldForce * cfg.fieldDisperse;
-    const { w: tw, h: th } = fld.tile;
-    let moving = false;
-    const steps = Math.ceil(dt / (1 / 240)), h = dt / steps;
-    for (const p of fld.parts) {
-      for (let i = 0; i < steps; i++) {
-        let ax = -w0 * w0 * (p.x - p.hx) - 2 * z * w0 * p.vx;
-        let ay = -w0 * w0 * (p.y - p.hy) - 2 * z * w0 * p.vy;
-        if (fld.hover > 0) {
-          const cx = p.x + tw / 2 - px, cy = p.y + th / 2 - py;
-          const dist = Math.hypot(cx, cy) || 0.001;
-          if (dist < R) {
-            const f = push * p.j * fld.hover * (1 - dist / R) * (1 - dist / R);
-            ax += (cx / dist) * f; ay += (cy / dist) * f;
-          }
-        }
-        p.vx += ax * h; p.vy += ay * h;
-        p.x += p.vx * h; p.y += p.vy * h;
-      }
-      // Keep them on the canvas.
-      p.x = Math.min(fld.w - tw, Math.max(0, p.x));
-      p.y = Math.min(fld.h - th, Math.max(0, p.y));
-      if (Math.abs(p.x - p.hx) > 0.2 || Math.abs(p.y - p.hy) > 0.2 || Math.abs(p.vx) + Math.abs(p.vy) > 2) moving = true;
-    }
-    if (!moving && fld.hover === 0) {
-      fld.parts.forEach((p) => { p.x = p.hx; p.y = p.hy; p.vx = p.vy = 0; });
-      drawField();
-      return;
-    }
-    drawField();
-    fld.raf = requestAnimationFrame(stepField);
-  }
-
-  const hex = (c) => [1, 3, 5].map((i) => parseInt(String(c).slice(i, i + 2), 16) || 0);
-  function drawField() {
-    if (!fld.dot) return;
-    fctx.clearRect(0, 0, fld.w, fld.h);
-    const d = fld.dot, rest = cfg.fieldRestColour;
-    const settled = fld.hover === 0 && fld.parts.every((p) => p.x === p.hx && p.y === p.hy);
-    if (settled) {
-      fctx.fillStyle = rest;
-      fctx.fillRect(fld.pad, fld.pad, d.w, d.h);
-      return;
-    }
-    const A = hex(rest), B = hex(cfg.fieldActiveColour);
-    const { w: tw, h: th } = fld.tile;
-    const g = 1 - cfg.fieldGap * fld.hover;
-    const sw = tw * g, sh = th * g;
-    for (const p of fld.parts) {
-      const moved = Math.hypot(p.x - p.hx, p.y - p.hy);
-      const t = Math.min(1, Math.max(cfg.fieldHoverTint * fld.hover, moved / Math.max(1, cfg.fieldColourDist)));
-      fctx.fillStyle = `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`;
-      // Full-size squares overlap a hair so the dot shows no seams.
-      const e = g >= 0.999 ? 0.5 : 0;
-      fctx.fillRect(p.x + (tw - sw) / 2, p.y + (th - sh) / 2, sw + e, sh + e);
-    }
-  }
-
-  ['pointermove', 'pointerdown', 'pointerup', 'pointercancel'].forEach((t) => addEventListener(t, onFieldPointer, { passive: true }));
-  document.addEventListener('pointerout', onFieldOut);
 
   layout();
 
@@ -544,9 +359,6 @@ export function createFooter(el, config) {
     relayout() { layout(); },
     naturalLength() { return Math.max(0.3, cfg.height); },
     destroy() {
-      stopField();
-      ['pointermove', 'pointerdown', 'pointerup', 'pointercancel'].forEach((t) => removeEventListener(t, onFieldPointer));
-      document.removeEventListener('pointerout', onFieldOut);
       reveals.forEach((x) => x.r.destroy());
       wave.destroy();
       el.classList.remove('foot');

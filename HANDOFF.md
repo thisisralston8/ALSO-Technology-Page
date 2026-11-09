@@ -50,8 +50,7 @@ npm run build:site   # the page as it should ship: no panel, settings baked in â
 - the colour wave on "Start small" and the footer headline;
 - the platform's drift and cursor lens;
 - the verticals' dot cursor;
-- the careers pixel trail;
-- the footer's force field.
+- the careers pixel trail.
 
 **Hand-offs between sections.** Some sections pass an element or a picture to the next one, and the director wires these up:
 
@@ -84,7 +83,7 @@ These are suggestions; adjust them to your theme's conventions.
 2. **Header and footer.**
    - The prototype draws its own nav (`index.html` plus `src/nav.js`) to match ridealso.com. On Shopify, use the theme's header and drop these.
    - Keep the CSS variable `--nav-h` set to the real header's height: Open road centres its hero in the space under it.
-   - The footer here is a section of the page (section 6, with the force-field full stop and the back-to-top cut). Decide with design whether it replaces the theme footer on this template or sits above it.
+   - The footer here is a section of the page (section 6, with the back-to-top cut). Decide with design whether it replaces the theme footer on this template or sits above it.
 3. **Lenis is page-wide.**
    - It smooths the whole document, including the theme's header and footer, so it should only run on this template.
    - The modal stops and restarts it.

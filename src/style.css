@@ -358,11 +358,8 @@ html.has-vert-cursor body > :not(.insp, .insp__show, .phone-preview) * { cursor:
 .foot__items { display: flex; flex-direction: column; align-items: flex-start; }
 .foot__items a { display: block; }
 .foot__logomask { position: absolute; overflow: clip; }
-/* Once the wordmark is up, the full stop's squares may be pushed past it. */
-.foot__logomask.is-open { overflow: visible; }
 .foot__logo { position: relative; display: block; width: 100%; height: 100%; }
 .foot__logo svg { display: block; width: 100%; height: 100%; }
-.foot__field { position: absolute; pointer-events: none; }
 .foot__legal { position: absolute; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
 .foot .rv-line-mask { padding-bottom: 0.3em; margin-bottom: -0.3em; }
 

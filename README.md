@@ -80,7 +80,6 @@ Content (Figma "Desktop - 113 / 114"): a headline and three categories (Logistic
   - Two link columns from an earlier frame are still in the code, hidden by default.
 - **Line reveals:** text gets the page's line reveal, and the wordmark rises from behind its own edge, each only once the footer has actually uncovered it.
 - **Colour wave:** the headline gets the colour wave (`src/colorWave.js`).
-- **Force field:** the wordmark's full stop is drawn as a grid of squares. Hovering near it pushes them apart, and springs pull them home.
 - **Back to top:** the button dispatches `page:top`, and `page.js` makes a quick cut: a fade out, a jump to the top, and a fade in. Its timings and colour are in the panel.
 
 ### Cursor lens

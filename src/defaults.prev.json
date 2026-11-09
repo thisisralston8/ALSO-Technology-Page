@@ -235,13 +235,11 @@
       "flowSoft": 0.5,
       "nightGap": -23,
       "slotLift": 0.4,
-      "startSize": 0.4,
       "slotWidth": 10,
       "startGap": 1.02,
       "startParallaxPx": 70,
       "dockLead": 0.6
-    },
-    "startSize": 0.262
+    }
   },
   "platform": {
     "length": 10,
@@ -658,7 +656,7 @@
     "invTop": 120,
     "invHead": "Our partners share our belief that the future of transportation is small.",
     "invHeadCol": 2,
-    "invHeadSpan": 4,
+    "invHeadSpan": 5,
     "invHeadAlign": "left",
     "invHeadSize": 48,
     "invHeadLeading": 48,
@@ -843,21 +841,6 @@
     "topCutOut": 0.3,
     "topCutIn": 0.5,
     "topCutColour": "#0b0b0b",
-    "field": "on",
-    "fieldGrid": 8,
-    "fieldRadius": 100,
-    "fieldForce": 1.05,
-    "fieldDisperse": 1,
-    "fieldReturn": 2,
-    "fieldDamping": 1,
-    "fieldJitter": 0.4,
-    "fieldGap": 0.4,
-    "fieldHoverPad": 16,
-    "fieldEase": 0.12,
-    "fieldRestColour": "#ffffff",
-    "fieldActiveColour": "#AC74FC",
-    "fieldColourDist": 1,
-    "fieldHoverTint": 0.4,
     "mobile": {
       "padTop": 64,
       "headCol": 1,
@@ -888,8 +871,7 @@
       "titleCol": 1,
       "titleSpan": 4,
       "shadeColour": "#0B0B0B",
-      "parallaxCurve": "linear",
-      "field": "off"
+      "parallaxCurve": "linear"
     },
     "title": "Last section",
     "titleSize": 92,
