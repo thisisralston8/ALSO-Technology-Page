@@ -7,7 +7,8 @@
                shell) which breakpoint the page is shown at
      body      search, then the section's parts as tabs, each part's groups
                as an accordion, each group's controls (controls.jsx)
-     footer    Save as default, Copy / Paste config, Reset all, shortcuts
+     footer    Save as default, Copy / Paste config, Download project;
+               Reset all (a quiet link) and the shortcuts
 
    Controls come from SCHEMA (editor/schema.js), never written by hand. The
    panel never touches the page directly: everything goes through `host`
@@ -21,7 +22,22 @@ import {
 import { SCHEMA, getPath, setPath } from '../schema.js';
 import { loadView, saveView } from '../store.js';
 import { Control } from './controls.jsx';
-import { ChevronLeft, ChevronRight, PanelRight } from './icons.jsx';
+import { ChevronLeft, ChevronRight, Download, PanelRight } from './icons.jsx';
+
+// The whole project as GitHub has it: the latest push to `main`, as a .zip
+// (the repo is public, so no sign-in). The browser saves it to Downloads.
+// Change these if the repo moves.
+const REPO = 'thisisralston8/ALSO-Technology-Page';
+const BRANCH = 'main';
+const PROJECT_ZIP = `https://github.com/${REPO}/archive/refs/heads/${BRANCH}.zip`;
+function downloadProject() {
+  const a = document.createElement('a');
+  a.href = PROJECT_ZIP;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
 
 const patchView = (patch) => saveView({ ...loadView(), ...patch });
 
@@ -409,21 +425,28 @@ export function Panel({ host, onHide, device: shownDevice = null, onDevice = nul
             action="Save as default" onConfirm={saveDefaults} />
         )}
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" className="flex-1"
+          <Button size="sm" variant="secondary" className="min-w-0 flex-1"
             onPress={async () => { await navigator.clipboard.writeText(host.exportAll()); flash('Config copied'); }}>Copy config</Button>
-          <Button size="sm" variant="secondary" className="flex-1"
+          <Button size="sm" variant="secondary" className="min-w-0 flex-1"
             onPress={async () => {
               try { host.importAll(await navigator.clipboard.readText()); host.reload(); flash('Config pasted'); }
               catch { flash('The clipboard doesn’t hold a config'); }
             }}>Paste config</Button>
-          <Confirm
-            trigger={<Button size="sm" variant="danger-soft" className="flex-1">Reset all</Button>}
-            title="Reset all?"
-            body="Clears this browser’s unsaved tweaks, back to the saved defaults."
-            action="Reset all" danger onConfirm={() => { host.reset(); host.reload(); }} />
+          <Button size="sm" variant="secondary" className="min-w-0 flex-1"
+            aria-label="Download project" title="Download the project: the latest version pushed to GitHub, as a .zip, saved to your Downloads folder"
+            onPress={() => { downloadProject(); flash('Downloading the latest from GitHub…'); }}>
+            <Download /> Download
+          </Button>
         </div>
-        <div className="flex min-h-5 items-center justify-between gap-2 text-xs text-muted">
-          <span role="status" aria-live="polite">{note}</span>
+        <div className="flex min-h-6 items-center justify-between gap-2 text-xs text-muted">
+          <span className="flex min-w-0 items-center gap-2">
+            <Confirm
+              trigger={<Button size="sm" variant="ghost" className="h-6 min-w-0 shrink-0 px-1.5 text-xs text-muted">Reset all</Button>}
+              title="Reset all?"
+              body="Clears this browser’s unsaved tweaks, back to the saved defaults."
+              action="Reset all" danger onConfirm={() => { host.reset(); host.reload(); }} />
+            <span className="truncate" role="status" aria-live="polite">{note}</span>
+          </span>
           <span className="flex items-center gap-1" aria-label="Shortcuts: H panel, W wireframe, G grid">
             <Kbd><Kbd.Content>H</Kbd.Content></Kbd><Kbd><Kbd.Content>W</Kbd.Content></Kbd>
             <Kbd><Kbd.Content>G</Kbd.Content></Kbd>
