@@ -6,8 +6,8 @@
    The panel's Desktop | Mobile switch is also the view: Desktop gives the
    page all the space beside the panel; Mobile shows the same page at a
    phone's size (one frame, resized, so the page switches to its phone
-   settings and the panel keeps driving it). Hiding the panel (H) gives the
-   page the whole window. */
+   settings and the panel keeps driving it). The panel starts hidden, giving the
+   page the whole window; Controls or H opens it. */
 
 import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -60,7 +60,8 @@ function Shell() {
   const [conn, setConn] = useState({ host: null, n: 0 });
   const host = conn.host;
   const setHost = (h) => setConn((c) => (c.host === h ? c : { host: h, n: c.n + 1 }));
-  const [panelOn, setPanelOn] = useState(true);
+  // The panel starts closed: the page gets the whole window until Controls (or H).
+  const [panelOn, setPanelOn] = useState(false);
   const [device, setDeviceState] = useState(loadView().device === 'mobile' ? 'mobile' : 'desktop');
   const setDevice = (d) => { setDeviceState(d); patchView({ device: d }); };
   const [size, setSizeState] = useState(SIZES.some(([v]) => v === loadView().previewSize) ? loadView().previewSize : SIZES[0][0]);
