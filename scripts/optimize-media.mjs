@@ -4,7 +4,8 @@
      src/assets/video/<stem>.<ext>   →  src/assets/optimized/video/<stem>.desktop.mp4  (1920 wide, ~3.5 Mbps)
                                         src/assets/optimized/video/<stem>.mobile.mp4   (720 wide, ~1.4 Mbps)
      src/assets/traffic/<name>       →  src/assets/optimized/traffic/<stem>.jpg        (360 px long edge)
-     src/assets/modal/<image>        →  src/assets/optimized/modal/<stem>.jpg          (2400 px long edge)
+     src/assets/modal/<image>        →  src/assets/optimized/modal/<stem>.jpg          (2400 px long edge;
+                                         .png instead when it has transparency)
      src/assets/modal/<video>        →  src/assets/optimized/modal/<stem>.{desktop,mobile}.mp4
 
    Uses only what ships with macOS: AVFoundation (a small Swift transcoder,
@@ -85,16 +86,24 @@ export async function optimizeImage(file, folder, log = console.log) {
   if (!IMAGE_EXT.includes(path.extname(file).toLowerCase())) return;
   const outDir = A('optimized', folder);
   await mkdir(outDir, { recursive: true });
-  const out = path.join(outDir, `${stemOf(file)}.jpg`);
-  if (await mtime(out) >= await sourceTime(file)) return;
+  // A modal image with transparency (a cut-out PNG, say) stays a PNG, so it
+  // keeps its alpha; everything else becomes a JPEG.
+  const srcTime = await sourceTime(file);
+  const jpg = path.join(outDir, `${stemOf(file)}.jpg`), png = path.join(outDir, `${stemOf(file)}.png`);
+  const done = Math.max(await mtime(jpg), await mtime(png));
+  if (done >= srcTime) return;
   // Only ever smaller: sips -Z would enlarge an image already under the size.
-  const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]);
+  const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', file]);
   const long = Math.max(...[...stdout.matchAll(/pixel(?:Width|Height): (\d+)/g)].map((m) => +m[1]));
+  const alpha = folder === 'modal' && /hasAlpha: yes/.test(stdout);
+  const out = alpha ? png : jpg;
   const resize = long > size ? ['-Z', String(size)] : [];
   const tmp = tmpFor(out);
-  await run('sips', [...resize, '-s', 'format', 'jpeg', '-s', 'formatOptions', quality, file, '--out', tmp]);
+  const format = alpha ? ['-s', 'format', 'png'] : ['-s', 'format', 'jpeg', '-s', 'formatOptions', quality];
+  await run('sips', [...resize, ...format, file, '--out', tmp]);
   await rename(tmp, out);
-  log(`[media] ${path.basename(file)} → ${folder === 'modal' ? 'web copy' : 'thumbnail'}`);
+  await rm(alpha ? jpg : png, { force: true });   // the other kind, from an earlier version of the file
+  log(`[media] ${path.basename(file)} → ${folder === 'modal' ? (alpha ? 'web copy (PNG, keeps transparency)' : 'web copy') : 'thumbnail'}`);
 }
 
 export async function optimizeAll(log = console.log) {

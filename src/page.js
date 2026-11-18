@@ -100,7 +100,7 @@ const videos = videoList.sort().map(([path, src]) => {
 // from its optimized copy (a 2400 px JPEG; the phone or desktop MP4), else
 // the original. A video's poster is the same-named JPEG in modal/posters.
 const modalPosters = byStem(import.meta.glob('./assets/modal/posters/*.jpg', { eager: true, query: '?url', import: 'default' }));
-const modalOptimizedGlob = import.meta.glob('./assets/optimized/modal/*.{jpg,mp4}', { eager: true, query: '?url', import: 'default' });
+const modalOptimizedGlob = import.meta.glob('./assets/optimized/modal/*.{jpg,png,mp4}', { eager: true, query: '?url', import: 'default' });
 const modalOptimized = byStem(modalOptimizedGlob);
 const modalList = DEV
   ? devOriginals(import.meta.glob('./assets/modal/*.{jpg,jpeg,png,webp,gif,avif,JPG,JPEG,PNG,WEBP,mp4,mov,webm,m4v,MP4,MOV}'))
@@ -108,7 +108,9 @@ const modalList = DEV
 const modalMedia = modalList.sort().map(([p, src]) => {
   const stem = variantStem(p);
   const kind = /\.(mp4|mov|webm|m4v)$/i.test(p) ? 'video' : 'image';
-  if (kind === 'image') { const best = modalOptimized[stem] || src; return { stem, kind, src: best, thumb: best, poster: '' }; }
+  // `clear`: a transparent PNG (the optimizer keeps those as PNG), shown
+  // whole on the card with no backing (modal.js).
+  if (kind === 'image') { const best = modalOptimized[stem] || src; return { stem, kind, src: best, thumb: best, poster: '', clear: /\.png(\?|$)/i.test(best) }; }
   const best = (phoneAtLoad && modalOptimized[`${stem}.mobile`]) || modalOptimized[`${stem}.desktop`] || src;
   return { stem, kind, src: best, thumb: modalPosters[stem] || '', poster: modalPosters[stem] || '' };
 });

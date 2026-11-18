@@ -694,6 +694,12 @@ html.is-wireframe .traf__car.is-photo {
 .xm__media.is-empty { display: flex; align-items: center; justify-content: center; background: #fff; }
 .xm__media img, .xm__media video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .xm__media.is-auto img, .xm__media.is-auto video { height: auto; }
+/* A transparent PNG: no dark backing, no shadow, the whole image shown
+   inside the slot's shape (positioned by its focus point). */
+.xm__media.is-clear { background: transparent; box-shadow: none; border-radius: 0; }
+.xm__media.is-clear img { object-fit: contain; }
+/* The hover lens (mediaLens.js): drawn over the picture, the same picture. */
+.xm__lens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .xm__slot {
   padding: 0 12px; text-align: center;
   color: #b4b4b4;

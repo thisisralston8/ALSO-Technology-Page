@@ -39,6 +39,7 @@ import { paintCover } from '../cover.js';
 import { createLineReveal, revealAtTop } from '../lineReveal.js';
 import { createColorWave, letters, WAVE_DEFAULTS } from '../colorWave.js';
 import { span as gridSpan, gridOptions } from '../grid.js';
+import { createPrinter, printParams } from '../riso.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
@@ -72,6 +73,13 @@ export function createTraffic(el, config) {
   // own lane round the text.
   const centred = () => cfg.heroPath !== 'lane';
   const trail = createTrail();
+  // The printed look (riso.js): each traffic picture (and, with printFills,
+  // each colour) printed once, in a worker, and shown in place of the
+  // original once it's ready. Async like any image load; never per frame.
+  const printer = createPrinter();
+  let printed = new Map();      // source (url or colour) → printed blob url
+  let printKey = '';
+  let printTimer = 0;
 
   el.classList.add('traf');
 
@@ -319,6 +327,43 @@ export function createTraffic(el, config) {
     return geo.yMin + (lo + t) * geo.step;
   }
 
+  /* The picture a piece shows: its printed copy when the printed look is on
+     and that copy is ready, else its own image (none for a colour). */
+  const printOn = () => cfg.print === 'on';
+  const printSource = (c) => c.src || (cfg.printFills === 'on' && c.fill ? c.fill : '');
+  function picOf(c) {
+    if (printOn()) { const p = printed.get(printSource(c)); if (p) return p; }
+    return c.src;
+  }
+
+  // Print every picture (and colour) in use with the current settings; as
+  // each is ready, the pieces showing it switch over.
+  function updatePrint() {
+    if (!printOn()) { clearTimeout(printTimer); if (printKey) { printKey = ''; printed = new Map(); printer.prune(null); repaintCars(); } return; }
+    const params = printParams(cfg);
+    const sources = new Set(geo.cars.map(printSource).filter(Boolean));
+    const key = JSON.stringify(params) + [...sources].join('|');
+    if (key === printKey || !sources.size) return;
+    printKey = key;
+    // Wait for a slider to come to rest before printing.
+    clearTimeout(printTimer);
+    printTimer = setTimeout(() => printAll(key, params, sources), 150);
+  }
+  function printAll(key, params, sources) {
+    const next = new Map();
+    let left = sources.size;
+    const done = () => { if (--left > 0 || printKey !== key) return; printed = next; printer.prune(params); repaintCars(); };
+    for (const what of sources) printer.print(what, params).then((url) => { next.set(what, url); done(); }, done);
+  }
+  function repaintCars() {
+    for (const c of geo.cars) {
+      c.bgKey = null;   // render rewrites the background next frame
+      const pic = picOf(c);
+      c.el.style.backgroundImage = pic ? `url("${pic}")` : '';
+    }
+    render(progress);
+  }
+
   /* What fills each piece of traffic: one of the images in
      src/assets/traffic, or one of the `colours`. `colourShare` of the pieces
      are colours, the rest images — chosen per piece by a seeded number, so
@@ -501,7 +546,7 @@ export function createTraffic(el, config) {
       Object.assign(old.el.style, {
         width: `${c.lane.w}px`, height: `${c.len}px`,
         borderRadius: `${cfg.carRadius}px`,
-        backgroundImage: c.src ? `url("${c.src}")` : '',
+        backgroundImage: picOf(old) ? `url("${picOf(old)}")` : '',
         backgroundColor: c.fill || '',
         visibility: 'hidden',
       });
@@ -519,6 +564,7 @@ export function createTraffic(el, config) {
     layoutText();
     buildRoad();
     buildCars();
+    updatePrint();
   }
 
   /* ---------- scroll ----------
@@ -667,7 +713,8 @@ export function createTraffic(el, config) {
       const bgKey = tint > 0 ? `${carColour}|${tint}` : '';
       if (c.bgKey !== bgKey) {
         c.bgKey = bgKey;
-        const img = c.src ? `url("${c.src}")` : '';
+        const pic = picOf(c);
+        const img = pic ? `url("${pic}")` : '';
         const col = hexA(carColour, tint);
         st.backgroundImage = tint > 0 ? `linear-gradient(${col}, ${col})${img ? `, ${img}` : ''}` : img;
         // Also as a variable, so wireframe can show the colour over its grey.
@@ -889,7 +936,7 @@ export function createTraffic(el, config) {
     // The element that carries the hero in this beat (for the director, so it
     // can clear its echoes when the hero changes hands).
     trailTarget: () => hero,
-    destroy() { if (push.raf) cancelAnimationFrame(push.raf); removeEventListener('pointermove', onPointer); document.removeEventListener('pointerout', onPointerOut); blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); wave.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
+    destroy() { clearTimeout(printTimer); printer.destroy(); if (push.raf) cancelAnimationFrame(push.raf); removeEventListener('pointermove', onPointer); document.removeEventListener('pointerout', onPointerOut); blurbReveals.forEach((r) => r.destroy()); headReveal.destroy(); wave.destroy(); trail.destroy(); el.classList.remove('traf'); view.remove(); hero.remove(); fillEl.remove(); },
     get config() { return cfg; },
   };
 }
@@ -991,6 +1038,28 @@ export const TRAFFIC_DEFAULTS = {
   bg: '#ffffff',
   fg: '#000000',
   images: [],
+
+  // The printed look (riso.js, ported from Pressroom): each picture printed
+  // in four inks on paper, once, when it loads or a setting changes.
+  print: 'off',
+  printFills: 'on',        // the colour fills get the paper and grain too
+  printSize: 160,          // px each picture is printed at (its longer side)
+  printDot: 3,             // halftone dot pitch, px of that print
+  printPixel: 1,           // sample the picture in blocks this big first (1 = off)
+  printGain: 20,           // ink spread, %
+  printShift: 1,           // plates off register, px
+  printGrain: 35,          // %
+  printWear: 20,           // %
+  printPaper: 60,          // paper colour and fibre, %
+  printSaturation: 110,    // %
+  printContrast: 110,      // %
+  printBrightness: 4,      // %
+  printInk1: '#2E86C1',    // prints where the picture lacks red (cyan's place): blue
+  printInk2: '#FF5A1F',    // lacks green (magenta's place): orange
+  printInk3: '#F7D417',    // lacks blue (yellow's place): yellow
+  printInk4: '#1E3B22',    // the darks (black's place): deep green
+  printPaperColour: '#F3EBDD',
+  printSeed: 17,
 };
 
 /* Mobile starting values (phones and tablets, below 1024 px wide), applied

@@ -743,6 +743,7 @@ export const PLATFORM_DEFAULTS = {
   modalCtrlBorder: '#0b0b0b',   // the outline round the close button, the switcher and its pill
   modalCtrlBorderWidth: 1,      // px
   // The layer switcher beside it: one segment per layer (Figma → Segmented Control).
+  modalLens: 'on',         // 'on' | 'off': the cursor lens on the modal's secondary pictures
   modalSeg: 'on',          // 'on' | 'off'
   modalSegGap: 16,         // px between the switcher and the close button
   modalSegPad: 8,          // px round the segments, inside the bar

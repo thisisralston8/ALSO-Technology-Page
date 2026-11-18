@@ -36,6 +36,7 @@ import { span as gridSpan } from './grid.js';
 import { cleanSvg } from './svgIcon.js';
 import closeSvg from './assets/ui/close.svg?raw';
 import { MODAL_LAYERS, MODAL_SLOTS, mediaKey, ratioKey, focusXKey, focusYKey } from './modalContent.js';
+import { createMediaLens } from './mediaLens.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -156,6 +157,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     f.style.aspectRatio = shape ? shape.replace(':', ' / ') : '';
     f.classList.toggle('is-auto', !shape);
     f.classList.toggle('is-empty', !it);
+    f.classList.toggle('is-clear', !!it?.clear);
     const m = f.firstElementChild;
     if (m && it) m.style.objectPosition = `${cfg[focusXKey(id)] ?? 50}% ${cfg[focusYKey(id)] ?? 50}%`;
   }
@@ -500,6 +502,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     if (tl || !ls?.[n - 1]) return;
     cfg = c;
     layers = ls;
+    mediaLens.setConfig(cfg);
     active = n - 1;
     closing = false;
     build();
@@ -569,6 +572,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   function close() {
     if (!tl || closing) return;
     closing = true;
+    mediaLens.leave(true);
     const { block, heading } = layers[active];
     const card = cards[active];
     const landed = stack.style.visibility !== 'hidden';
@@ -637,6 +641,28 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     tl = null; closing = false; metrics = null;
   }
 
+  /* ---------- hover lens ----------
+     The secondary pictures (everything but a layer's hero) take the
+     platform's cursor lens on hover (mediaLens.js), with the platform's lens
+     settings. Rechecked on scroll, since the pictures move under a still
+     cursor. */
+  const mediaLens = createMediaLens();
+  const lensFig = (x, y) => document.elementFromPoint(x, y)?.closest?.('.xm__media:not(.xm__hero):not(.is-empty)');
+  let lastPtr = null;
+  function hoverAt(x, y) {
+    const f = tl && !closing ? lensFig(x, y) : null;
+    if (f && f.closest('.xm__stack') === stack) mediaLens.enter(f, x, y);
+    else mediaLens.leave();
+    mediaLens.move(x, y);
+  }
+  root.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
+    lastPtr = [e.clientX, e.clientY];
+    hoverAt(e.clientX, e.clientY);
+  }, { passive: true });
+  root.addEventListener('pointerleave', () => { lastPtr = null; mediaLens.leave(); });
+  scroller.addEventListener('scroll', () => { if (lastPtr) hoverAt(...lastPtr); }, { passive: true });
+
   scroller.addEventListener('scroll', update, { passive: true });
   // A click outside the cards (on the dimmed page) closes it.
   scroller.addEventListener('click', (e) => { if (!e.target.closest('.xm__card')) close(); });
@@ -666,6 +692,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
   function setConfig(c) {
     if (!tl || closing || !cards.length) return;
     cfg = c;
+    mediaLens.setConfig(cfg);
     const card = cards[active], off = scroller.scrollTop - card.top;
     layout();
     scroller.scrollTop = card.top + off;
