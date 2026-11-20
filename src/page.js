@@ -25,7 +25,7 @@ import { createSteps } from './steps.js';
 import { createGrain, GRAIN_DEFAULTS } from './grain.js';
 import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
 import { GRID_DEFAULTS, GRID_MOBILE, setGrid, showGridOverlay } from './grid.js';
-import { load as loadSaved, save as saveState, saveDefaults, loadView, watch } from './editor/store.js';
+import { load as loadSaved, save as saveSaved, useDefaults, saveDefaults, loadView, watch } from './editor/store.js';
 import savedDefaults from './defaults.json';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -163,6 +163,14 @@ gsap.ticker.lagSmoothing(0);
    Everywhere else the panel is loaded on demand, after the page is running. */
 const EDITOR = import.meta.env.VITE_EDITOR !== 'off';
 
+// Tweaks saved against older defaults are dropped (store.js `useDefaults`).
+const defaultsStamp = (() => {
+  const t = JSON.stringify(savedDefaults);
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = (Math.imul(h, 33) ^ t.charCodeAt(i)) >>> 0;
+  return `${h.toString(36)}-${t.length}`;
+})();
+if (EDITOR) useDefaults(defaultsStamp);
 let saved = EDITOR ? loadSaved() : {};
 
 /* Three layers, lowest first:
@@ -365,6 +373,25 @@ phoneMQ.addEventListener('change', () => {
   Object.keys(authored).forEach(apply);
   director.relayout();
 });
+
+/* This browser's tweaks keep only what differs from the defaults (the
+   section composed without them), so a later change to defaults.json still
+   shows for every setting that wasn't touched here. */
+const SKIP = new Set(['images', 'videos', 'mobile']);
+const differs = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+function saveState(id, next) {
+  const mine = saved;
+  saved = {};
+  const base = compose(id);
+  saved = mine;
+  const out = {};
+  for (const [k, v] of Object.entries(next)) if (!SKIP.has(k) && differs(v, base[k])) out[k] = v;
+  const mobile = {};
+  for (const [k, v] of Object.entries(next.mobile || {})) if (differs(v, base.mobile?.[k])) mobile[k] = v;
+  if (Object.keys(mobile).length) out.mobile = mobile;
+  saveSaved(id, out);
+  saved = loadSaved();
+}
 
 // Everything as authored, in the shape defaults.json stores it.
 function currentSettings() {

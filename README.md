@@ -31,7 +31,7 @@ Settings come from three layers, lowest first:
 
 1. the built-in `*_DEFAULTS` in each beat's source
 2. **`src/defaults.json`** — the project defaults
-3. this browser's own unsaved tweaks (localStorage, saved automatically as you edit)
+3. this browser's own unsaved tweaks (localStorage, saved automatically as you edit). Only the settings you changed are kept, and they are dropped when `defaults.json` changes (a Save as default or a new deploy), so the latest defaults always show
 
 **Save as default** (the panel's footer) writes everything currently on screen into `src/defaults.json`, so it becomes the starting point for anyone who opens the page — including a production build, which bakes the file in. It asks to confirm first, keeps the previous file as `src/defaults.prev.json` (copy it back to undo one save), clears your local tweaks (they now *are* the defaults) and reloads. It's only offered on the dev server, which is what writes the file. **Reset all** (the small link beside the shortcuts) clears your local tweaks back to the saved defaults; to get back to the built-in values, set `src/defaults.json` to `{}`. **Download** fetches the whole project as GitHub has it — the latest push to `main`, as a .zip (`REPO` / `BRANCH` in `src/editor/panel/Panel.jsx`) — and the browser saves it to Downloads. It's the pushed version, so commits that haven't been pushed yet aren't in it.
 

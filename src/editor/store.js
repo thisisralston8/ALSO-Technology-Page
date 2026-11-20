@@ -13,6 +13,19 @@ const prune = (o) => {
   return out;
 };
 
+/* This browser's tweaks are made against one version of the project's
+   defaults (src/defaults.json). When those change (a Save as default, a new
+   deploy), tweaks made against the old ones are dropped, so the new defaults
+   show: kept, they'd silently mask them. `stamp` identifies the defaults. */
+const STAMP_KEY = 'also-traffic-page:defaults';
+export function useDefaults(stamp) {
+  try {
+    if (localStorage.getItem(STAMP_KEY) === stamp) return;
+    localStorage.removeItem(KEY);
+    localStorage.setItem(STAMP_KEY, stamp);
+  } catch { /* storage off: nothing saved anyway */ }
+}
+
 export function load() {
   try {
     return JSON.parse(localStorage.getItem(KEY)) || {};
