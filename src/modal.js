@@ -35,7 +35,7 @@
 import { span as gridSpan } from './grid.js';
 import { cleanSvg } from './svgIcon.js';
 import closeSvg from './assets/ui/close.svg?raw';
-import { MODAL_LAYERS, MODAL_SLOTS, mediaKey, ratioKey, focusXKey, focusYKey } from './modalContent.js';
+import { MODAL_LAYERS, MODAL_SLOTS, MODAL_COPY, copyKey, mediaKey, ratioKey, focusXKey, focusYKey } from './modalContent.js';
 import { createMediaLens } from './mediaLens.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -80,24 +80,36 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
 
   const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const fig = (slot) => `<figure class="xm__media" data-slot="${slot}"></figure>`;
-  const copy = (it) => `<div class="xm__copy"><h3>${esc(it.title)}</h3><p>${esc(it.text)}</p></div>`;
+  // Copy comes from the settings (modalCopy_*), falling back to the words in
+  // modalContent.js. Each element is tagged with its key, so edits from the
+  // panel are written in place (`fillCopy`) without rebuilding the card.
+  const COPY = Object.fromEntries(MODAL_COPY.map((c) => [c.id, c.text]));
+  const words = (id) => cfg?.[copyKey(id)] ?? COPY[id] ?? '';
+  const txt = (tag, id, cls = '') => `<${tag}${cls ? ` class="${cls}"` : ''} data-copy="${id}">${esc(words(id))}</${tag}>`;
+  const copy = (it) => `<div class="xm__copy">${txt('h3', `${it.slot}Title`)}${txt('p', `${it.slot}Text`)}</div>`;
 
   // One layer's content (modalContent.js). Groups (`.xm__group`) cascade
   // piece by piece; everything else is one piece (see `partsOf`).
   function content(i) {
     const L = MODAL_LAYERS[i];
     if (!L) return '';
-    return L.blocks.map((b) => {
+    return L.blocks.map((b, k) => {
       if (b.kind === 'hero') return fig(b.slot).replace('xm__media', 'xm__media xm__hero');
-      if (b.kind === 'lede') return `<p class="xm__lede">${esc(b.text)}</p>`;
-      if (b.kind === 'rows') return `<div class="xm__group xm__rows xm__rows--${b.style}">${b.items.map((it, k) =>
-        `<div class="xm__row${b.style === 'alt' && k % 2 ? ' is-flip' : ''}">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
+      if (b.kind === 'lede') return txt('p', `${L.id}Lede`, 'xm__lede');
+      if (b.kind === 'rows') return `<div class="xm__group xm__rows xm__rows--${b.style}">${b.items.map((it, n) =>
+        `<div class="xm__row${b.style === 'alt' && n % 2 ? ' is-flip' : ''}">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
       if (b.kind === 'grid') return `<div class="xm__group xm__grid" style="--cols:${b.cols}">${b.items.map((it) =>
         `<div class="xm__item">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
-      if (b.kind === 'statement') return `<div class="xm__statement"><h3>${esc(b.title)}</h3><p>${esc(b.text)}</p></div>`;
+      if (b.kind === 'features') return `<div class="xm__group xm__features">${b.items.map((it) =>
+        `<div class="xm__feature">${fig(it.slot)}${copy(it)}</div>`).join('')}</div>`;
+      if (b.kind === 'statement') return `<div class="xm__statement">${txt('h3', `${L.id}Statement${k}Title`)}${txt('p', `${L.id}Statement${k}Text`)}</div>`;
       return '';
     }).join('');
   }
+  const fillCopy = () => stack.querySelectorAll('[data-copy]').forEach((el) => {
+    const t = words(el.dataset.copy);
+    if (el.textContent !== t) el.textContent = t;
+  });
   // The pieces of a card's body that cascade, top to bottom.
   const partsOf = (c) => [...c.body.querySelectorAll(':scope > :not(.xm__group), :scope > .xm__group > *')];
 
@@ -151,7 +163,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
         f.appendChild(tag);
       }
     }
-    const ratio = cfg[ratioKey(id)] || 'auto';
+    const ratio = sl.own ? '901:506' : cfg[ratioKey(id)] || 'auto';
     // 'auto' with nothing in it: the Figma shape, so the placeholder has one.
     const shape = ratio !== 'auto' ? ratio : it ? null : sl.shape[phone.matches ? 1 : 0];
     f.style.aspectRatio = shape ? shape.replace(':', ' / ') : '';
@@ -159,7 +171,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     f.classList.toggle('is-empty', !it);
     f.classList.toggle('is-clear', !!it?.clear);
     const m = f.firstElementChild;
-    if (m && it) m.style.objectPosition = `${cfg[focusXKey(id)] ?? 50}% ${cfg[focusYKey(id)] ?? 50}%`;
+    if (m && it && !sl.own) m.style.objectPosition = `${cfg[focusXKey(id)] ?? 50}% ${cfg[focusYKey(id)] ?? 50}%`;
   }
   const fillSlots = () => stack.querySelectorAll('.xm__media').forEach(fillSlot);
   const stopVideos = () => videos.forEach((v) => v.pause());
@@ -176,7 +188,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
           <span class="xm__num">${String(i + 1).padStart(2, '0')}</span>
           <h2 class="xm__title"></h2>
         </header>
-        <div class="xm__body">${content(i)}</div>`;
+        <div class="xm__body"${MODAL_LAYERS[i]?.gap ? ` style="--xm-gap:${MODAL_LAYERS[i].gap}"` : ''}>${content(i)}</div>`;
       const q = (s) => el.querySelector(s);
       q('.xm__title').textContent = l.heading.textContent;
       el.style.zIndex = String(i + 1);   // each card slides up over the last
@@ -341,6 +353,11 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     const ctrlH = Math.max(cfg.modalCloseSize, cfg.modalSeg === 'on' ? cfg.modalSegHeight + 2 * Math.max(cfg.modalSegPad, cfg.modalCtrlBorderWidth) : 0);
     const padBottom = Math.max(pad, cfg.modalCloseBottom + ctrlH + 16 - M);
     root.style.setProperty('--xm-media-r', `${cfg.modalMediaRadius ?? 16}px`);
+    root.style.setProperty('--xm-head', `${cfg.modalHeadSize ?? 44}px`);
+    root.style.setProperty('--xm-head-lh', `${cfg.modalHeadLine ?? 48}px`);
+    root.style.setProperty('--xm-text', `${cfg.modalBodySize ?? 20}px`);
+    root.style.setProperty('--xm-text-lh', `${cfg.modalBodyLine ?? 24}px`);
+    root.style.setProperty('--xm-copy-gap', `${cfg.modalCopyGap ?? 24}px`);
     fillSlots();
     cards.forEach((c, i) => {
       Object.assign(c.el.style, {
@@ -693,6 +710,7 @@ export function createModal({ gsap, lenis, media = [], onLayer = () => {} }) {
     if (!tl || closing || !cards.length) return;
     cfg = c;
     mediaLens.setConfig(cfg);
+    fillCopy();
     const card = cards[active], off = scroller.scrollTop - card.top;
     layout();
     scroller.scrollTop = card.top + off;

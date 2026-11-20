@@ -10,21 +10,36 @@
    adding an entry here — never by writing DOM by hand. */
 
 import { waveRows } from '../colorWave.js';
-import { MODAL_LAYERS, MODAL_SLOTS, RATIOS, mediaKey, ratioKey, focusXKey, focusYKey } from '../modalContent.js';
+import { MODAL_LAYERS, MODAL_SLOTS, MODAL_COPY, RATIOS, copyKey, mediaKey, ratioKey, focusXKey, focusYKey } from '../modalContent.js';
 
-/* The Explore modal's content: a group per layer, and under it each image
-   slot — what fills it, its shape and its crop. Desktop and Mobile (the
-   panel's switch) each have their own; Mobile starts from the Figma phone
-   shapes. */
-const modalContentRows = () => MODAL_LAYERS.flatMap((l) => [
-  { group: l.name, note: `The ${l.name} card, after the Figma frames. Each slot takes an image or a video (muted, looping while it's on screen). Switch Desktop / Mobile at the top of the panel to set the phone's file and shape.` },
-  ...MODAL_SLOTS.filter((sl) => sl.layer === l.name).flatMap((sl) => [
-    { sub: sl.label },
-    { p: mediaKey(sl.id), label: 'Image or video', type: 'media' },
+/* The Explore modal's content: a group per layer, and under it, in reading
+   order, its intro, and each area's headline, body and picture — what fills
+   it, its shape and its crop. Desktop and Mobile (the panel's switch) each
+   have their own; Mobile starts from the Figma phone shapes and the desktop
+   words. */
+const slotRows = (sl) => [
+  { p: mediaKey(sl.id), label: 'Image or video', type: 'media', ...(sl.own ? { hint: 'Export the collage at 901 × 506. It’s shown whole, standing on the bottom edge, with no backing (a transparent PNG sits straight on the card)' } : {}) },
+  ...sl.own ? [] : [
     { p: ratioKey(sl.id), label: 'Shape', type: 'seg', wrap: true, options: RATIOS.map((r) => [r, r === 'auto' ? 'File' : r]), hint: 'File: the image or video’s own shape' },
     { p: focusXKey(sl.id), label: 'Crop focus across', min: 0, max: 100, step: 1, unit: '%', when: (c) => !!c[mediaKey(sl.id)] && c[ratioKey(sl.id)] !== 'auto' },
     { p: focusYKey(sl.id), label: 'Crop focus down', min: 0, max: 100, step: 1, unit: '%', when: (c) => !!c[mediaKey(sl.id)] && c[ratioKey(sl.id)] !== 'auto' },
-  ]),
+  ],
+];
+const copyRow = (c) => ({ p: copyKey(c.id), label: c.field === 'title' ? 'Headline' : c.block === 'Intro' ? 'Intro' : 'Body', type: 'textarea', rows: c.field === 'title' ? 2 : 4 });
+const modalContentRows = () => MODAL_LAYERS.flatMap((l) => [
+  { group: l.name, note: `The ${l.name} card, after the Figma frames: its intro, then each area's headline, body and picture. A picture slot takes an image or a video (muted, looping while it's on screen). Switch Desktop / Mobile at the top of the panel to set the phone's words, file and shape.` },
+  ...l.blocks.flatMap((b, k) => {
+    const copies = MODAL_COPY.filter((c) => c.layer === l.name);
+    if (b.kind === 'hero') return [{ sub: 'Hero' }, ...slotRows(MODAL_SLOTS.find((sl) => sl.id === b.slot))];
+    if (b.kind === 'lede') return [{ sub: 'Intro' }, copyRow(copies.find((c) => c.id === `${l.id}Lede`))];
+    if (b.kind === 'statement') return [{ sub: b.title }, ...copies.filter((c) => c.id.startsWith(`${l.id}Statement${k}`)).map(copyRow)];
+    if (b.items) return b.items.flatMap((it) => [
+      { sub: it.title },
+      ...copies.filter((c) => c.slot === it.slot).map(copyRow),
+      ...slotRows(MODAL_SLOTS.find((sl) => sl.id === it.slot)),
+    ]);
+    return [];
+  }),
 ]);
 
 export const SCHEMA = {
@@ -717,6 +732,15 @@ export const SCHEMA = {
     { p: 'modalInk', label: 'Text', type: 'color' },
 
     { part: 'Modal content' },
+    { group: 'Area text', note: 'The headline and body of every content area, in every layer (not the intros or the Autonomy statement). Edit the words in each layer’s group below.' },
+    { sub: 'Headline' },
+    { p: 'modalHeadSize', label: 'Size', min: 12, max: 120, step: 1, unit: 'px' },
+    { p: 'modalHeadLine', label: 'Line height', min: 12, max: 140, step: 1, unit: 'px' },
+    { sub: 'Body' },
+    { p: 'modalBodySize', label: 'Size', min: 10, max: 48, step: 1, unit: 'px' },
+    { p: 'modalBodyLine', label: 'Line height', min: 10, max: 64, step: 1, unit: 'px' },
+    { sub: 'Spacing' },
+    { p: 'modalCopyGap', label: 'Between headline and body', min: 0, max: 80, step: 1, unit: 'px' },
     ...modalContentRows(),
 
     { part: 'Look' },

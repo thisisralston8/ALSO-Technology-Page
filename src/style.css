@@ -641,7 +641,7 @@ html.is-wireframe .traf__car.is-photo {
 .xm__body {
   --u: calc(100cqw / 1127);
   display: flex; flex-direction: column;
-  gap: clamp(64px, calc(128 * var(--u)), 128px);
+  gap: clamp(64px, calc(var(--xm-gap, 128) * var(--u)), calc(var(--xm-gap, 128) * 1px));
 }
 .xm__body h3, .xm__body p { margin: 0; font-weight: 400; }
 .xm__lede {
@@ -651,9 +651,11 @@ html.is-wireframe .traf__car.is-photo {
   text-align: center;
   text-wrap: pretty;
 }
-.xm__copy { display: flex; flex-direction: column; gap: 24px; }
-.xm__copy h3 { font-size: clamp(26px, calc(44 * var(--u)), 44px); line-height: 1.09; letter-spacing: -0.045em; }
-.xm__copy p, .xm__body .xm__copy p { font-size: 16px; line-height: 24px; letter-spacing: -0.25px; }
+/* A content area's headline and body: sizes from the settings (Modal
+   content → Area text; modal.js sets the variables). */
+.xm__copy { display: flex; flex-direction: column; gap: var(--xm-copy-gap, 24px); }
+.xm__copy h3 { font-size: var(--xm-head, 44px); line-height: var(--xm-head-lh, 48px); letter-spacing: -0.045em; }
+.xm__copy p, .xm__body .xm__copy p { font-size: var(--xm-text, 20px); line-height: var(--xm-text-lh, 24px); letter-spacing: -0.25px; }
 
 /* Media beside text, a row at a time. */
 .xm__rows { display: flex; flex-direction: column; gap: clamp(64px, calc(128 * var(--u)), 128px); }
@@ -668,8 +670,15 @@ html.is-wireframe .traf__car.is-photo {
 /* Media over text, `--cols` across. */
 .xm__grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 24px; align-items: start; }
 .xm__item { display: flex; flex-direction: column; gap: 24px; }
-.xm__item .xm__copy { gap: 16px; }
-.xm__item .xm__copy h3 { font-size: clamp(22px, calc(32 * var(--u)), 32px); line-height: 1.125; letter-spacing: -0.047em; }
+
+/* Features (Software): a wide visual — the Figma collage, one image or
+   video — over a centred title and text, 901 and 455 px of the 1127. */
+.xm__features { display: flex; flex-direction: column; gap: clamp(64px, calc(var(--xm-gap, 128) * var(--u)), calc(var(--xm-gap, 128) * 1px)); }
+.xm__feature { display: flex; flex-direction: column; align-items: center; gap: calc(40 * var(--u)); }
+.xm__feature .xm__media { width: calc(901 * var(--u)); background: transparent; box-shadow: none; border-radius: 0; }
+.xm__feature .xm__media img, .xm__feature .xm__media video { object-fit: contain; object-position: 50% 100%; }
+.xm__feature .xm__media.is-empty { background: #fff; }
+.xm__feature .xm__copy { width: max(280px, calc(455 * var(--u))); text-align: center; }
 
 .xm__statement {
   display: flex; flex-direction: column; gap: 24px;
@@ -719,9 +728,10 @@ html.is-wireframe .traf__car.is-photo {
   .xm__row, .xm__rows--alt .xm__row, .xm__rows--alt .xm__row.is-flip { flex-direction: column; align-items: stretch; gap: 24px; padding: 0; }
   .xm__rows--alt .xm__media, .xm__rows--left .xm__media { flex: none; width: 100%; }
   .xm__rows--alt .xm__copy, .xm__rows--left .xm__copy { flex: none; width: auto; }
-  .xm__copy, .xm__item .xm__copy { gap: 8px; }
-  .xm__copy h3, .xm__item .xm__copy h3 { font-size: 24px; line-height: 28px; letter-spacing: -1px; }
   .xm__grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .xm__features { gap: 80px; }
+  .xm__feature { gap: 24px; }
+  .xm__feature .xm__media, .xm__feature .xm__copy { width: 100%; }
   .xm__statement { padding: 0; text-align: center; }
   .xm__statement h3 { font-size: 44px; line-height: 48px; letter-spacing: -2px; }
   .xm__statement p { font-size: 24px; line-height: 28px; letter-spacing: -1px; }

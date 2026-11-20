@@ -9,7 +9,12 @@
      rows       media beside text, one per row ('alt' alternates sides,
                 'left' keeps the media on the left)
      grid       media over text, `cols` across
+     features   one wide visual (a collage, exported as one image or video)
+                over a centred title and text, one after another
      statement  a big centred headline with a paragraph under it
+
+   A layer's `gap` (Figma px at 1127 wide) spaces its blocks, if not the
+   usual 128.
 
    Every piece of media is a *slot*. What fills it — an image or a video —
    and its shape are settings (Isometric platform → Modal content), with
@@ -31,11 +36,11 @@ export const MODAL_LAYERS = [
     ],
   },
   {
-    id: 'sw', name: 'Software',
+    id: 'sw', name: 'Software', gap: 220,
     blocks: [
       { kind: 'hero', slot: 'swHero' },
-      { kind: 'lede', text: 'Our vehicles are highly intelligent. Thousands of useful signals coming from vehicle which leads to better products. In house pipeline between the software and our product. There teleology that’s sending the signals to the cloud that we own. Sensors we own, cloud we own, software we own, OTA we own. Intelligent & connected.' },
-      { kind: 'rows', style: 'left', items: [
+      { kind: 'lede', text: 'ALSO vehicles are software-defined. That means everything, from propulsion to braking to UI, runs on software. Built in concert with the vehicle hardware, ALSO software is what makes an ordinary ride extraordinary.' },
+      { kind: 'features', items: [
         { slot: 'sw1', title: 'Built to get better.', text: 'Always improving, always impressing. With deep software integration, ALSO vehicles receive over-the-air updates (OTAs) that range from different ways to ride to security features.' },
         { slot: 'sw2', title: 'Full stack smarts.', text: 'Full stack architecture means that data and software pervade the ALSO experience. This makes for some of the world’s most intelligent and connected vehicles.' },
         { slot: 'sw3', title: 'State of the architecture.', text: 'Zonal architecture is the most modern automotive standard. Strategically placed compute modules unlock powerful functionality, and yield more cohesive OTAs.' },
@@ -67,11 +72,35 @@ const SHAPES = {
   hero: ['16:9', '4:5'],
   rows: { alt: ['16:10', '5:4'], left: ['1:1', '1:1'] },
   grid: { 3: ['9:8', '1:1'], 2: ['4:3', '1:1'] },
+  features: ['16:9', '16:9'],
 };
 export const MODAL_SLOTS = MODAL_LAYERS.flatMap((l) => l.blocks.flatMap((b) => {
   if (b.kind === 'hero') return [{ id: b.slot, layer: l.name, label: 'Hero', shape: SHAPES.hero }];
   if (b.kind === 'rows') return b.items.map((it) => ({ id: it.slot, layer: l.name, label: it.title, shape: SHAPES.rows[b.style] }));
+  // A feature's visual (`own`) is always the Figma box, 901 × 506, with the
+  // whole file shown in it, standing on its bottom edge: it's a collage
+  // exported from Figma, so the caption sits exactly 40 below the picture.
+  if (b.kind === 'features') return b.items.map((it) => ({ id: it.slot, layer: l.name, label: it.title, shape: SHAPES.features, own: true }));
   if (b.kind === 'grid') return b.items.map((it) => ({ id: it.slot, layer: l.name, label: it.title, shape: SHAPES.grid[b.cols] }));
+  return [];
+}));
+
+/* Every headline and paragraph, in reading order, as a setting (Isometric
+   platform → Modal content), so the copy can be edited — with a phone
+   override like anything else. The words above are the defaults. Keys:
+   `modalCopy_<id>`, where id is the slot's (`sw1Title`, `sw1Text`), or the
+   layer's for its intro and statements (`swLede`, `auStatement0Title`). */
+export const copyKey = (id) => `modalCopy_${id}`;
+export const MODAL_COPY = MODAL_LAYERS.flatMap((l) => l.blocks.flatMap((b, k) => {
+  if (b.kind === 'lede') return [{ id: `${l.id}Lede`, layer: l.name, block: 'Intro', field: 'text', text: b.text }];
+  if (b.kind === 'statement') return [
+    { id: `${l.id}Statement${k}Title`, layer: l.name, block: b.title, field: 'title', text: b.title },
+    { id: `${l.id}Statement${k}Text`, layer: l.name, block: b.title, field: 'text', text: b.text },
+  ];
+  if (b.items) return b.items.flatMap((it) => [
+    { id: `${it.slot}Title`, layer: l.name, slot: it.slot, field: 'title', text: it.title },
+    { id: `${it.slot}Text`, layer: l.name, slot: it.slot, field: 'text', text: it.text },
+  ]);
   return [];
 }));
 
@@ -85,10 +114,13 @@ export const RATIOS = ['auto', '21:9', '16:9', '16:10', '3:2', '4:3', '5:4', '9:
 
 // Defaults for every slot: empty (a placeholder card), the Figma shapes,
 // cropped about the centre.
-export const MODAL_CONTENT_DEFAULTS = Object.fromEntries(MODAL_SLOTS.flatMap((s) => [
-  [mediaKey(s.id), ''],
-  [ratioKey(s.id), s.shape[0]],
-  [focusXKey(s.id), 50],
-  [focusYKey(s.id), 50],
-]));
+export const MODAL_CONTENT_DEFAULTS = Object.fromEntries([
+  ...MODAL_SLOTS.flatMap((s) => [
+    [mediaKey(s.id), ''],
+    [ratioKey(s.id), s.shape[0]],
+    [focusXKey(s.id), 50],
+    [focusYKey(s.id), 50],
+  ]),
+  ...MODAL_COPY.map((c) => [copyKey(c.id), c.text]),
+]);
 export const MODAL_CONTENT_MOBILE = Object.fromEntries(MODAL_SLOTS.map((s) => [ratioKey(s.id), s.shape[1]]));

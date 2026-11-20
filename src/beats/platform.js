@@ -774,6 +774,12 @@ export const PLATFORM_DEFAULTS = {
   modalInk: '#0b0b0b',
   modalPad: 0,             // px inside the card, round its content (the Figma frames have none)
   modalMediaRadius: 16,    // px corners on the images and videos
+  // The content areas' headline and body (every one, in every layer).
+  modalHeadSize: 44,       // px
+  modalHeadLine: 48,       // px line height
+  modalBodySize: 20,       // px
+  modalBodyLine: 24,       // px line height
+  modalCopyGap: 24,        // px between headline and body
   // What fills each image slot, its shape and its crop (modalContent.js).
   ...MODAL_CONTENT_DEFAULTS,
 
@@ -845,6 +851,7 @@ export const PLATFORM_DEFAULTS = {
    grid, and the platform centred below it. */
 export const PLATFORM_MOBILE = {
   modalCol: 1, modalSpan: 4, modalMargin: 24, modalTitleSize: 44, modalCloseSize: 48, modalCloseBottom: 20,
+  modalHeadSize: 24, modalHeadLine: 28, modalBodySize: 16, modalBodyLine: 24, modalCopyGap: 8,
   modalSegGap: 8, modalSegPad: 4, modalSegHeight: 40, modalSegMinWidth: 0, modalSegPadX: 10, modalSegFont: 13,
   ...MODAL_CONTENT_MOBILE,
   heroSize: 28,

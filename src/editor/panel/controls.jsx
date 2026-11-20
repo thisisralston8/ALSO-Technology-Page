@@ -221,7 +221,7 @@ function TextControl({ api, row }) {
   return (
     <Stack api={api} row={row}>
       <TextField aria-label={row.label} value={api.read(row.p) ?? ''} onChange={(t) => api.write(row.p, t)}>
-        <TextArea rows={row.p === 'text' ? 4 : 2} spellCheck={false} className="min-h-0 resize-y text-sm" />
+        <TextArea rows={row.rows ?? (row.p === 'text' ? 4 : 2)} spellCheck={false} className="min-h-0 resize-y text-sm" />
       </TextField>
     </Stack>
   );
