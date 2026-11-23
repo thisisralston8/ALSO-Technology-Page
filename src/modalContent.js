@@ -48,14 +48,14 @@ export const MODAL_LAYERS = [
     ],
   },
   {
-    id: 'au', name: 'Autonomy',
+    id: 'au', name: 'Autonomy', gap: 220,
     blocks: [
       { kind: 'hero', slot: 'auHero' },
-      { kind: 'lede', text: 'In partnership with Rivian, ALSO is on an accelerated path towards L4 autonomy. This self-sustaining framework will power a dynamic lineup of small autonomous vehicles.' },
-      { kind: 'grid', cols: 3, items: [
-        { slot: 'au1', title: 'A flywheel on wheels', text: 'With every ALSO or Rivian ride the model gets smarter. It’s a positive feedback loop that grows with each new set of wheels.' },
-        { slot: 'au2', title: 'Scaled from square one.', text: 'With every ALSO or Rivian ride the model gets smarter. It’s a positive feedback loop that grows with each new set of wheels.' },
+      { kind: 'lede', text: 'ALSO is partnering with Rivian to expand the Rivian Autonomy Platform into smaller vehicles. Not limited to passenger transport alone, ALSO’s autonomous vehicles are set to transform meal delivery, e-commerce, and logistics.' },
+      { kind: 'features', items: [
         { slot: 'au3', title: 'An intelligent head start.', text: 'ALSO is building on top of Rivian Autonomy, one of the most capable real-world driving data models in the world.' },
+        { slot: 'au1', title: 'A flywheel on wheels', text: 'With every ALSO or Rivian ride the model gets smarter. It’s a positive feedback loop that grows with each new set of wheels.' },
+        { slot: 'au2', title: 'Scaled from square one.', text: 'Automotive-grade compute architecture—cost-effective at scale—doesn’t get built overnight. It’s ALSO’s hardware foundation.' },
       ] },
       { kind: 'statement', title: 'Up and running on AV 2.0', text: 'AV2.0 is the next-generation autonomous vehicle model. Similar to LLMs, it’s an end-to-end neural network built on reasoning versus rules.' },
       { kind: 'grid', cols: 2, items: [

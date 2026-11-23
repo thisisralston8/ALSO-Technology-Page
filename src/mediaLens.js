@@ -8,7 +8,8 @@
    One WebGL canvas, shared: it is laid over whichever figure is hovered and
    draws that figure's <img> or <video> exactly as the page shows it (cover
    or contain, at its object-position), so with the lens faded out it is the
-   same picture. It only runs while a lens is showing; the canvas leaves when
+   same picture. The original is hidden while the canvas is up: drawn on top
+   of it, a transparent picture's see-through parts would be covered twice. It only runs while a lens is showing; the canvas leaves when
    the lens has faded away. Plain WebGL, so the modal doesn't need three.js. */
 
 const VERT = `
@@ -43,17 +44,23 @@ const FRAG = `
     float mask = (1.0 - smoothstep(uSize, uSize + uSoftness, radius)) * uHover;
     vec2 refracted = vUv - toCenter * uRefraction * mask;
     vec2 shift = toCenter * uAberration * mask;
-    vec4 color = vec4(0.0);
-    vec4 total = vec4(0.0);
+    // Premultiplied colour: each channel is split on its own, and so is its
+    // coverage (the alpha seen through that channel). The result covers as
+    // much as its most-covered channel, so colour never exceeds alpha and a
+    // transparent picture stays exactly as see-through outside the lens.
+    vec3 color = vec3(0.0), cover = vec3(0.0), total = vec3(0.0);
     for (int i = 0; i < MAX_DISPERSION; i++) {
       if (i >= uDispersion) break;
       float t = (float(i) + 0.5) / float(uDispersion);
-      vec3 w3 = clamp(1.0 - 2.0 * abs(t - vec3(0.0, 0.5, 1.0)), 0.0, 1.0);
-      vec4 w = vec4(w3, (w3.r + w3.g + w3.b) / 3.0);
-      color += pic(refracted + shift * (1.0 - 2.0 * t)) * w;
+      vec3 w = clamp(1.0 - 2.0 * abs(t - vec3(0.0, 0.5, 1.0)), 0.0, 1.0);
+      vec4 c = pic(refracted + shift * (1.0 - 2.0 * t));
+      color += c.rgb * w;
+      cover += c.a * w;
       total += w;
     }
-    gl_FragColor = color / max(total, vec4(1e-4));
+    total = max(total, vec3(1e-4));
+    cover /= total;
+    gl_FragColor = vec4(color / total, max(cover.r, max(cover.g, cover.b)));
   }
 `;
 
@@ -66,6 +73,7 @@ export function createMediaLens() {
   const lens = { x: 0.5, y: 0.5, hover: 0 };
   const pointer = { x: 0, y: 0 };
   let raf = 0, last = 0, uploaded = null;
+  let hidden = null;      // the original picture, hidden under the canvas
 
   function init() {
     if (gl || failed) return !!gl;
@@ -145,7 +153,9 @@ export function createMediaLens() {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    if (hidden !== m) { show(); hidden = m; m.style.visibility = 'hidden'; }
   }
+  const show = () => { if (hidden) hidden.style.visibility = ''; hidden = null; };
 
   function tick(now) {
     raf = 0;
@@ -172,6 +182,7 @@ export function createMediaLens() {
     raf = 0;
     leaving = null;
     canvas?.remove();
+    show();
     uploaded = null;
   }
 

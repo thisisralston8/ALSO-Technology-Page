@@ -669,7 +669,9 @@ html.is-wireframe .traf__car.is-photo {
 
 /* Media over text, `--cols` across. */
 .xm__grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 24px; align-items: start; }
-.xm__item { display: flex; flex-direction: column; gap: 24px; }
+.xm__item { display: flex; flex-direction: column; gap: calc(40 * var(--u)); }
+/* Captions centred under their pictures, as in the Autonomy frame. */
+.xm__item .xm__copy { text-align: center; }
 
 /* Features (Software): a wide visual — the Figma collage, one image or
    video — over a centred title and text, 901 and 455 px of the 1127. */
@@ -681,14 +683,16 @@ html.is-wireframe .traf__car.is-photo {
 .xm__feature .xm__copy { width: max(280px, calc(455 * var(--u))); text-align: center; }
 
 .xm__statement {
-  display: flex; flex-direction: column; gap: 24px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(40 * var(--u));
   padding-inline: calc(96 * var(--u));
+  text-align: center;
 }
 .xm__statement h3 {
   font-size: clamp(40px, calc(72 * var(--u)), 72px); line-height: 0.944; letter-spacing: -0.055em;
   text-align: center;
 }
-.xm__statement p { font-size: clamp(22px, calc(32 * var(--u)), 32px); line-height: 1.125; letter-spacing: -0.047em; }
+/* Body L, 720 of the 1127 wide (Autonomy frame). */
+.xm__statement p { max-width: calc(720 * var(--u)); font-size: 20px; line-height: 28px; letter-spacing: -0.25px; }
 
 /* An image slot. Empty, it's a white card as in the frames, labelled so it
    can be found in the panel (Isometric platform → Modal content). */
@@ -734,6 +738,8 @@ html.is-wireframe .traf__car.is-photo {
   .xm__feature .xm__media, .xm__feature .xm__copy { width: 100%; }
   .xm__statement { padding: 0; text-align: center; }
   .xm__statement h3 { font-size: 44px; line-height: 48px; letter-spacing: -2px; }
-  .xm__statement p { font-size: 24px; line-height: 28px; letter-spacing: -1px; }
+  .xm__statement { gap: 24px; }
+  .xm__statement p { max-width: none; font-size: 16px; line-height: 24px; letter-spacing: -0.25px; }
+  .xm__item { gap: 24px; }
 }
 
