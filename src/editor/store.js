@@ -5,7 +5,7 @@
 const KEY = 'also-traffic-page:config';
 
 // Images and videos are injected at boot and would bloat (and stale-date) the save.
-const STRIP = ['images', 'videos'];
+const STRIP = ['images', 'videos', 'films'];
 
 const prune = (o) => {
   const out = {};

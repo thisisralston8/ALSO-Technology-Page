@@ -41,8 +41,8 @@ export function posterFrom(file) {
   });
 }
 
-async function send(stem, part, body, ext = '') {
-  const res = await fetch(`/__upload-video?stem=${encodeURIComponent(stem)}&part=${part}&ext=${encodeURIComponent(ext)}`, {
+async function send(stem, part, body, ext = '', folder = 'video') {
+  const res = await fetch(`/__upload-video?stem=${encodeURIComponent(stem)}&part=${part}&ext=${encodeURIComponent(ext)}&folder=${folder}`, {
     method: 'POST', body,
   });
   const out = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
@@ -51,14 +51,20 @@ async function send(stem, part, body, ext = '') {
 
 // `getConfig` / `onChange`: Open road's authored settings (desktop values +
 // phone overrides), so choosing the new video never bakes phone values in.
+// `target`: which setting the new video fills — the hero's `video` (saved in
+// src/assets/video/) or the full film's `film` (src/assets/film/, kept with
+// its sound).
 export function videoUploader({ getConfig, onChange, saveState, persist }) {
-  return async (file, onStatus = () => {}) => {
+  return async (file, onStatus = () => {}, target = 'video') => {
+    const film = target === 'film';
+    const list = film ? 'films' : 'videos';
+    const pick = (stem) => (film ? { film: stem } : { video: stem, heroMedia: 'video' });
     const cfg = getConfig();
     if (!cfg) throw new Error('No Open road section');
     const ext = extOf(file.name);
 
     // A name that isn't taken.
-    const taken = new Set((cfg.videos || []).map((v) => v.stem));
+    const taken = new Set((cfg[list] || []).map((v) => v.stem));
     const base = slug(file.name);
     let stem = base;
     for (let k = 2; taken.has(stem); k++) stem = `${base}-${k}`;
@@ -67,18 +73,18 @@ export function videoUploader({ getConfig, onChange, saveState, persist }) {
     const poster = await posterFrom(file);
 
     if (!persist) {
-      const videos = [...(cfg.videos || []), { stem, src: URL.createObjectURL(file), poster: poster.url }];
-      onChange({ ...cfg, videos, video: stem, heroMedia: 'video' });
+      const items = [...(cfg[list] || []), { stem, src: URL.createObjectURL(file), poster: poster.url }];
+      onChange({ ...cfg, [list]: items, ...pick(stem) });
       return { stem, saved: false };
     }
 
     onStatus('Uploading…');
     // Select it first: adding the file makes Vite reload the page.
     const prevSaved = { ...cfg };
-    saveState('open-road', { ...cfg, video: stem, heroMedia: 'video' });
+    saveState('open-road', { ...cfg, ...pick(stem) });
     try {
-      await send(stem, 'poster', poster.blob);
-      await send(stem, 'video', file, ext);
+      await send(stem, 'poster', poster.blob, '', film ? 'film' : 'video');
+      await send(stem, 'video', file, ext, film ? 'film' : 'video');
     } catch (e) {
       saveState('open-road', prevSaved);
       throw e;

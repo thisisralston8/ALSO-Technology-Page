@@ -21,6 +21,7 @@ import { createCareers, CAREERS_DEFAULTS, CAREERS_MOBILE } from './beats/careers
 import { createFooter, FOOTER_DEFAULTS, FOOTER_MOBILE } from './beats/footer.js';
 import { createNav } from './nav.js';
 import { createModal } from './modal.js';
+import { createFilm } from './film.js';
 import { createSteps } from './steps.js';
 import { createGrain, GRAIN_DEFAULTS } from './grain.js';
 import { REVEAL_DEFAULTS, setRevealOptions } from './lineReveal.js';
@@ -93,6 +94,19 @@ const videos = videoList.sort().map(([path, src]) => {
   const stem = variantStem(path);
   const best = (phoneAtLoad && optimizedVideo[`${stem}.mobile`]) || optimizedVideo[`${stem}.desktop`] || src;
   return { stem, src: best, poster: posterUrls[stem] || '' };
+});
+
+// The full film (Open road's play button): each video in assets/film, kept
+// with its sound, with a same-named .jpg as its poster. Played from the
+// desktop copy (a phone's too: it's watched full screen), else the original.
+const filmPosters = byStem(import.meta.glob('./assets/film/*.jpg', { eager: true, query: '?url', import: 'default' }));
+const optimizedFilm = byStem(import.meta.glob('./assets/optimized/film/*.mp4', { eager: true, query: '?url', import: 'default' }));
+const filmList = DEV
+  ? devOriginals(import.meta.glob('./assets/film/*.{mp4,mov,webm,m4v}'))
+  : onePerStem(Object.entries(optimizedFilm).map(([stem, src]) => [`${stem}.mp4`, src]));
+const films = filmList.sort().map(([path, src]) => {
+  const stem = variantStem(path);
+  return { stem, src: optimizedFilm[`${stem}.desktop`] || src, poster: filmPosters[stem] || '' };
 });
 
 // The Explore modal's images and videos: everything in assets/modal, by
@@ -218,7 +232,7 @@ function compose(id) {
     ...OPEN_ROAD_DEFAULTS,
     ...(t.heroColour ? { heroColour: t.heroColour } : {}),
     ...(t.heroColourAmount != null ? { heroColourAmount: t.heroColourAmount } : {}),
-    ...l, image: resolveImage(l.image), videos,
+    ...l, image: resolveImage(l.image), videos, films,
   }, OPEN_ROAD_MOBILE);
 }
 
@@ -315,6 +329,16 @@ const modal = createModal({
 let follow = null;
 document.addEventListener('plat:explore', (e) => modal.open({ ...e.detail, cfg: effective(authored.platform) }));
 
+// The full film (film.js): Open road's play button asks for it. Its own
+// upload if one is chosen, else the hero video.
+const film = createFilm({ lenis });
+document.addEventListener('road:film', () => {
+  const c = effective(authored['open-road']);
+  const f = films.find((x) => x.stem === c.film)
+    || (c.videos || []).find((v) => v.stem === c.video) || (c.videos || [])[0];
+  if (f) film.open({ src: f.src, poster: f.poster, config: c });
+});
+
 // Back to top (the footer's arrow): a quick cut, like the modal's layer
 // switcher — fade out, jump, fade back in — rather than scrolling the whole
 // page back. Page chrome: the footer only asks for it.
@@ -377,7 +401,7 @@ phoneMQ.addEventListener('change', () => {
 /* This browser's tweaks keep only what differs from the defaults (the
    section composed without them), so a later change to defaults.json still
    shows for every setting that wasn't touched here. */
-const SKIP = new Set(['images', 'videos', 'mobile']);
+const SKIP = new Set(['images', 'videos', 'films', 'mobile']);
 const differs = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
 function saveState(id, next) {
   const mine = saved;
@@ -395,7 +419,7 @@ function saveState(id, next) {
 
 // Everything as authored, in the shape defaults.json stores it.
 function currentSettings() {
-  const strip = ({ images: _images, videos: _videos, ...rest }) => rest;
+  const strip = ({ images: _images, videos: _videos, films: _films, ...rest }) => rest;
   const out = {};
   Object.entries(authored).forEach(([id, c]) => { out[id] = strip(c); });
   out['open-road'].image = stemOf(out['open-road'].image);
@@ -422,7 +446,7 @@ if (EDITOR && !embedded) {
    second browser window — apply here as they're made. Only sections whose
    settings actually changed are re-applied. */
 const sameSettings = (a, b) => {
-  const strip = ({ images: _i, videos: _v, ...rest }) => rest;
+  const strip = ({ images: _i, videos: _v, films: _f, ...rest }) => rest;
   return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
 };
 // Review settings (wireframe, the grid overlay) are set in the panel and

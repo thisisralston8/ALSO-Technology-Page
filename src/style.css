@@ -192,6 +192,120 @@ body {
   will-change: transform;
 }
 
+/* The headline over the hero: the same type as the line (size, tracking,
+   leading), centred on the picture, wrapping inside it. */
+.road__shade { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.road__title {
+  position: absolute; top: 0; left: 0;
+  margin: 0;
+  width: max-content;
+  font-size: var(--type-size, 92px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+}
+/* Play: the hero is the button; its icon is the cursor (or a badge). */
+.road__play {
+  position: absolute; top: 0; left: 0;
+  margin: 0; padding: 0; border: 0;
+  background: none;
+  cursor: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.road__play:focus-visible { outline: 2px solid var(--road-fg, #000); outline-offset: 4px; }
+/* Where the button is: a wrapper the size of the button. */
+.road__badge, .road__cursor {
+  display: grid;
+  width: var(--play-size, 72px); height: var(--play-size, 72px);
+  pointer-events: none;
+}
+.road__badge { position: absolute; top: 0; left: 0; }
+/* The button itself — Figma: Icon Button (Play), 72 px, ube, 1 px ink
+   border, a hard 2 px shadow — and how it comes and goes: scaled down and
+   faded when out (`--play-scale-from`, `--play-fade-from`), up to full when
+   on, over `--play-in`, back over `--play-out`. */
+.road__dot {
+  display: grid; place-items: center;
+  box-sizing: border-box;
+  width: 100%; height: 100%;
+  border: 1px solid #0b0b0b;
+  border-radius: 999px;
+  background: var(--play-bg, #ac74fc);
+  box-shadow: 0 2px 0 var(--play-shadow, #4a6b3c);
+  opacity: var(--play-fade-from, 0);
+  transform: scale(var(--play-scale-from, 0.4));
+  transition: transform var(--play-out, 0.25s) var(--play-ease, ease), opacity var(--play-out, 0.25s) var(--play-ease, ease);
+}
+.is-on .road__dot {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: var(--play-in, 0.35s);
+}
+.road__dot img { display: block; width: 24px; height: 24px; }
+/* The button's tilt, sway and stretch (open-road.js, `paintTilt`), between
+   where it is and how it comes and goes. */
+.road__tilt { display: grid; width: 100%; height: 100%; transform-style: preserve-3d; will-change: transform; }
+/* The glow on the headline: the words again, over themselves, painted with
+   a radial gradient around the button and clipped to the letters. */
+.road__title > span:first-child { position: relative; }
+.road__glow {
+  position: absolute; inset: 0;
+  color: transparent;
+  background: radial-gradient(circle var(--glow-r, 260px) at var(--gx, 50%) var(--gy, 50%),
+    var(--glow-colour, #ac74fc) var(--glow-core, 10%), transparent 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0;
+  transition: opacity var(--glow-out, 0.25s) var(--play-ease, ease);
+}
+.road__glow.is-on { opacity: var(--glow-strength, 0.9); transition-duration: var(--glow-in, 0.35s); }
+/* Over the page and its grain's tint, under the modal and the film. */
+.road__cursor { position: fixed; top: 0; left: 0; z-index: 95; will-change: transform; }
+/* The scroll hint: Body M, centred under the hero. */
+.road__hint {
+  position: absolute; left: 0; right: 0;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0;
+  opacity: 0;
+  transform: translateY(var(--hint-y, 0px));
+  pointer-events: none;
+}
+
+/* ---------- the full film (film.js) ---------- */
+.film {
+  position: fixed; inset: 0; z-index: 99;
+  display: grid; place-items: center;
+  background: var(--film-bg, #000);
+  opacity: 0;
+  transition: opacity var(--film-fade, 0.3s) ease;
+}
+.film[hidden] { display: none; }
+.film.is-open { opacity: 1; }
+.film__video { width: 100%; height: 100%; object-fit: contain; background: var(--film-bg, #000); }
+/* Figma: Icon Button (Close) — white, 1 px ink border, a hard 2 px shadow.
+   In while the mouse moves, out when it's still. */
+.film__close {
+  position: absolute; top: 24px; right: 24px;
+  display: grid; place-items: center;
+  box-sizing: border-box;
+  width: 56px; height: 56px; padding: 0;
+  border: 1px solid #0b0b0b; border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 0 #48316a;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--film-fade, 0.3s) ease;
+}
+.film__close img { display: block; width: 24px; height: 24px; }
+.film.is-awake .film__close, .film__close:focus-visible { opacity: 1; }
+.film__close:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+html.film-open .road__cursor { display: none !important; }
+
 /* ---------- beat 2: traffic ---------- */
 
 .traf { background: var(--traf-bg, #fff); color: var(--traf-fg, #000); }

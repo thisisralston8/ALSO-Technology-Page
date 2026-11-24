@@ -19,10 +19,22 @@
    (inline) → square (the handoff tile), and `object-fit: cover` re-crops the
    picture continuously, so only one element ever moves.
 
-   Like every other beat: a pure function of progress, reversible by scrubbing. */
+   Over the hero at the very start: a headline ("Our story starts here."),
+   which fades, blurs and settles away as the scroll begins (a pure function
+   of progress, like everything else here), and a play button — the cursor
+   itself, over the hero, on a mouse; a button under the headline on touch —
+   that asks the page for the full film (`road:film`, film.js).
+
+   Like every other beat: a pure function of progress, reversible by scrubbing.
+   Two exceptions, both outside the scroll: the play cursor follows the
+   pointer, and the scroll hint ("Scroll to begin the journey.") appears on
+   time, after `hintDelay` seconds at the top for someone who hasn't scrolled
+   yet, fading in like Platform verticals' statistics. */
 
 import { createTrail, TRAIL_DEFAULTS } from '../trail.js';
 import { createLineReveal } from '../lineReveal.js';
+import playIcon from '../assets/ui/play.svg';
+import { createColorWave, letters, WAVE_DEFAULTS } from '../colorWave.js';
 
 export function createOpenRoad(el, config, deps) {
   let cfg = config;
@@ -83,7 +95,56 @@ export function createOpenRoad(el, config, deps) {
   runL.className = runR.className = 'road__run';
   line.append(runL, runR);
 
-  el.append(art, line);
+  // A shade over the picture while the headline is on it, for legibility.
+  const shade = document.createElement('div');
+  shade.className = 'road__shade';
+  art.insertBefore(shade, tintEl);
+
+  // The headline over the hero.
+  const title = document.createElement('p');
+  title.className = 'road__title';
+
+  // Play: the hero itself is the button (it's under the cursor, which becomes
+  // the play icon); on touch, or from the keyboard, the icon sits as a badge
+  // under the headline.
+  const play = document.createElement('button');
+  play.type = 'button';
+  play.className = 'road__play';
+  play.setAttribute('aria-label', 'Play the film');
+  // Each is a positioned wrapper around the drawn button (`.road__dot`), so
+  // where it is (exactly at the pointer) and how it comes and goes (a scale
+  // and a fade, `is-on`, CSS transitions) never fight.
+  const badge = document.createElement('span');
+  badge.className = 'road__badge';
+  badge.setAttribute('aria-hidden', 'true');
+  badge.innerHTML = `<span class="road__tilt"><span class="road__dot"><img src="${playIcon}" alt="" width="24" height="24"></span></span>`;
+  const cursor = badge.cloneNode(true);
+  cursor.className = 'road__cursor';
+  document.body.appendChild(cursor);
+  const tiltEl = cursor.querySelector('.road__tilt');
+
+  // The headline's glow: a second copy of the words over them, filled with a
+  // radial gradient in the button's colour centred on the button and clipped
+  // to the letters (background-clip: text), so the light falls on the type
+  // and nowhere else.
+  const titleText = document.createElement('span');
+  const glow = document.createElement('span');
+  glow.className = 'road__glow';
+  glow.setAttribute('aria-hidden', 'true');
+  title.append(titleText, glow);
+  play.addEventListener('click', () => el.dispatchEvent(new CustomEvent('road:film', { bubbles: true })));
+
+  // The scroll hint, under the hero.
+  const hint = document.createElement('p');
+  hint.className = 'road__hint';
+  hint.setAttribute('aria-hidden', 'true');
+  // As it comes in it flashes purple and settles to its colour, letter by
+  // letter — the colour wave on "Start small" (colorWave.js), started the
+  // moment the hint appears rather than by the scroll.
+  const hintWave = createColorWave(hint);
+  let hintTextNow = null;
+
+  el.append(art, line, title, play, badge, hint);
 
   // Motion trail on the hero image (and, via the director, the handoff tile).
   // A video's echoes copy its current frame; an image's are simple clones.
@@ -253,6 +314,7 @@ export function createOpenRoad(el, config, deps) {
       h: ih,
     };
     placeKnot();
+    placeHint();
   }
 
   /* ---------- render ----------
@@ -309,6 +371,161 @@ export function createOpenRoad(el, config, deps) {
     const cy = r.y + r.h / 2;
     runL.style.transform = `translate3d(${r.x - geo.gap - geo.lw}px, ${cy}px, 0) translateY(-50%)`;
     runR.style.transform = `translate3d(${r.x + r.w + geo.gap}px, ${cy}px, 0) translateY(-50%)`;
+
+    // The headline over the hero: gone over titleFrom → titleTo (shares of
+    // this section's scroll), fading, blurring and sinking a little, like
+    // Platform verticals' statistics leaving.
+    const t = cfg.title ? smoothstep(cfg.titleFrom, Math.max(cfg.titleFrom + 1e-3, cfg.titleTo), p) : 1;
+    const cx = r.x + r.w / 2;
+    title.style.maxWidth = `${Math.max(0, r.w - 2 * cfg.titlePad)}px`;
+    title.style.transform = `translate3d(${cx}px, ${cy}px, 0) translate(-50%, -50%) translateY(${(cfg.titleRise * t).toFixed(2)}px)`;
+    title.style.opacity = (1 - t).toFixed(3);
+    title.style.filter = t > 0.001 ? `blur(${(cfg.titleBlur * t).toFixed(2)}px)` : '';
+    title.style.visibility = t >= 0.999 ? 'hidden' : '';
+    shade.style.opacity = (cfg.titleShade * (1 - t)).toFixed(3);
+
+    // Play, while the hero is still the hero.
+    playOn = cfg.play === 'on' && p <= cfg.playUntil && !maskedExit;
+    play.style.display = playOn ? '' : 'none';
+    if (playOn) {
+      play.style.transform = `translate3d(${r.x}px, ${r.y}px, 0)`;
+      play.style.width = `${r.w}px`;
+      play.style.height = `${r.h}px`;
+      // The badge: under the headline (or centred, with no headline).
+      const below = cfg.title ? title.offsetHeight / 2 + cfg.playGap + cfg.playSize / 2 : 0;
+      badge.style.transform = `translate3d(${cx}px, ${cy + below}px, 0) translate(-50%, -50%)`;
+    }
+    paintPlay();
+  }
+
+  /* ---------- play cursor ----------
+     On a mouse, over the hero, the cursor *is* the play button: the icon
+     follows the pointer exactly (no easing of its own) and the system cursor
+     is hidden there. Touch, or keyboard focus, shows the badge instead. */
+  let playOn = false, focused = false;
+  const pointer = { x: 0, y: 0, in: false };
+  const canHover = matchMedia('(hover: hover) and (pointer: fine)');
+  function paintPlay() {
+    const r = playOn && pointer.in ? play.getBoundingClientRect() : null;
+    const film = document.documentElement.classList.contains('film-open');
+    const over = !!r && pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom
+      && canHover.matches && !film;
+    // The cursor keeps following the pointer while it scales and fades away,
+    // so it leaves from where the pointer left.
+    cursor.style.display = canHover.matches && pointer.in && !film ? 'grid' : 'none';
+    cursor.style.transform = `translate3d(${pointer.x - cfg.playSize / 2}px, ${pointer.y - cfg.playSize / 2}px, 0)`;
+    cursor.classList.toggle('is-on', over);
+    badge.classList.toggle('is-on', playOn && (!canHover.matches || focused));
+    // The glow, centred on the button, in the headline's own box.
+    const lit = over && cfg.glow === 'on' && !!cfg.title;
+    glow.classList.toggle('is-on', lit);
+    if (lit) {
+      const b = title.getBoundingClientRect();
+      // The title's box is scaled by nothing but may be blurred/faded; its
+      // rect is in screen pixels, like the pointer.
+      glow.style.setProperty('--gx', `${(pointer.x - b.left).toFixed(1)}px`);
+      glow.style.setProperty('--gy', `${(pointer.y - b.top).toFixed(1)}px`);
+    }
+  }
+  const onMove = (e) => {
+    const was = pointer.in ? { x: pointer.x, y: pointer.y } : null;
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = e.pointerType !== 'touch';
+    paintPlay();
+    alive(was);
+  };
+
+  /* ---------- the button, alive ----------
+     Like Platform verticals' square cursor, it answers the pointer's motion:
+     it tilts in 3D towards where it's going, sways round a little with
+     sideways movement, and stretches along its path. A spring follows the
+     pointer's speed, so it leans in as you move, overshoots a touch, and
+     settles back flat when you stop. Its position is still exactly the
+     pointer's; only the button itself moves. Runs only while there's motion
+     to settle; off for reduced motion. */
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const spring = { vx: 0, vy: 0, dx: 0, dy: 0, px: 0, py: 0, last: 0, raf: 0 };
+  // `from`: where the pointer was before this move, so the first frame
+  // already sees the motion that woke it.
+  function alive(from) {
+    if (spring.raf || cfg.playAlive !== 'on' || reduced.matches) return;
+    spring.px = from ? from.x : pointer.x; spring.py = from ? from.y : pointer.y;
+    spring.last = performance.now();
+    spring.raf = requestAnimationFrame(springStep);
+  }
+  function springStep(now) {
+    spring.raf = 0;
+    const dt = Math.min(0.05, Math.max(1e-3, (now - spring.last) / 1000));
+    spring.last = now;
+    // The pointer's speed this frame (px/s), as a share of the speed that
+    // gives the full effect, kept to length 1 (direction is kept).
+    let nx = (pointer.x - spring.px) / dt / cfg.playSpeed, ny = (pointer.y - spring.py) / dt / cfg.playSpeed;
+    spring.px = pointer.x; spring.py = pointer.y;
+    const n = Math.hypot(nx, ny);
+    if (n > 1) { nx /= n; ny /= n; }
+    // A damped spring towards it: `playResponse` is how quickly, `playWobble`
+    // how much it overshoots on the way (0 = none).
+    const k = cfg.playResponse * cfg.playResponse;
+    const c = 2 * cfg.playResponse * (1 - Math.min(0.95, cfg.playWobble));
+    spring.dx += (k * (nx - spring.vx) - c * spring.dx) * dt;
+    spring.dy += (k * (ny - spring.vy) - c * spring.dy) * dt;
+    spring.vx += spring.dx * dt;
+    spring.vy += spring.dy * dt;
+    paintTilt();
+    const moving = Math.abs(spring.vx) + Math.abs(spring.vy) + Math.abs(spring.dx) + Math.abs(spring.dy) > 1e-3 || n > 1e-3;
+    if (moving && cfg.playAlive === 'on') spring.raf = requestAnimationFrame(springStep);
+    else { Object.assign(spring, { vx: 0, vy: 0, dx: 0, dy: 0 }); paintTilt(); }
+  }
+  function paintTilt() {
+    const { vx, vy } = spring;
+    const m = Math.min(1.5, Math.hypot(vx, vy));
+    if (m < 1e-4) { tiltEl.style.transform = ''; return; }
+    const a = Math.atan2(vy, vx);
+    const st = 1 + cfg.playStretch * m;
+    // Lean into the direction of travel: its leading edge dips away.
+    tiltEl.style.transform = `perspective(${cfg.playSize * 5}px) rotateX(${(-vy * cfg.playTilt).toFixed(2)}deg) rotateY(${(vx * cfg.playTilt).toFixed(2)}deg)`
+      + ` rotate(${(vx * cfg.playSpin).toFixed(2)}deg)`
+      + ` rotate(${a}rad) scale(${st.toFixed(4)}, ${(1 / st).toFixed(4)}) rotate(${-a}rad)`;
+  }
+  const onOut = (e) => { if (!e.relatedTarget) { pointer.in = false; paintPlay(); } };
+  addEventListener('pointermove', onMove, { passive: true });
+  document.addEventListener('pointerout', onOut);
+  play.addEventListener('focus', () => { focused = play.matches(':focus-visible'); paintPlay(); });
+  play.addEventListener('blur', () => { focused = false; paintPlay(); });
+  canHover.addEventListener('change', paintPlay);
+
+  /* ---------- scroll hint ----------
+     For someone who hasn't scrolled yet: after `hintDelay` s at the top it
+     fades in under the hero; the first scroll sends it away for good. */
+  let scrolled = false, hintTimer = 0, hintShown = false;
+  // While it's up, the wave runs again every `hintRepeat` s — out of the
+  // settled colour, through the flash and back — to catch the eye.
+  let hintRepeatTimer = 0;
+  function repeatHint() {
+    clearInterval(hintRepeatTimer);
+    hintRepeatTimer = 0;
+    if (!hintShown || !(cfg.hintRepeat > 0) || cfg.wave !== 'on') return;
+    hintRepeatTimer = setInterval(() => hintWave.replay(cfg.waveTo), cfg.hintRepeat * 1000);
+  }
+  function showHint(on, instant = false) {
+    hintShown = on;
+    // The wave starts when the hint does (a top of 0 is always "on screen").
+    hintWave.update(on ? 0 : Infinity, 1, cfg);
+    repeatHint();
+    const d = instant ? 0 : on ? cfg.hintIn : cfg.hintOut;
+    hint.style.transition = ['opacity', 'transform', 'filter'].map((k) => `${k} ${d}s ${cfg.hintEase}`).join(', ');
+    hint.style.opacity = on ? '1' : '0';
+    hint.style.filter = on ? 'blur(0px)' : `blur(${cfg.hintBlur}px)`;
+    hint.style.setProperty('--hint-y', on ? '0px' : `${cfg.hintRise}px`);
+  }
+  function syncHint() {
+    if (progress > 0.0005) scrolled = true;
+    const want = cfg.hint === 'on' && !scrolled;
+    if (!want) { clearTimeout(hintTimer); hintTimer = 0; if (hintShown) showHint(false); return; }
+    if (!hintShown && !hintTimer) hintTimer = setTimeout(() => { hintTimer = 0; if (cfg.hint === 'on' && !scrolled) showHint(true); }, cfg.hintDelay * 1000);
+  }
+  function placeHint() {
+    const top = Math.min(geo.hero.y + geo.hero.h + cfg.hintGap, geo.H - cfg.hintLeading - 16);
+    hint.style.top = `${top}px`;
   }
 
   /* The path. Each of centre-x, centre-y, width and height is a monotone
@@ -363,6 +580,37 @@ export function createOpenRoad(el, config, deps) {
     line.style.setProperty('--type-size', `${geo.ts || cfg.typeSize}px`);
     el.style.setProperty('--road-bg', cfg.bg);
     el.style.setProperty('--road-fg', cfg.fg);
+    if (titleText.textContent !== cfg.title) { titleText.textContent = cfg.title; glow.textContent = cfg.title; }
+    title.style.color = cfg.titleColour;
+    title.style.fontSize = cfg.titleSize > 0 ? `${cfg.titleSize}px` : '';
+    shade.style.background = cfg.titleShadeColour;
+    [badge, cursor].forEach((b) => {
+      b.style.setProperty('--play-size', `${cfg.playSize}px`);
+      b.style.setProperty('--play-bg', cfg.playColour);
+      b.style.setProperty('--play-shadow', cfg.playShadow);
+      // Coming in: from `playScaleFrom` and `playFadeFrom` to full, over
+      // `playIn`; going out the same way back, over `playOut`.
+      b.style.setProperty('--play-in', `${cfg.playIn}s`);
+      b.style.setProperty('--play-out', `${cfg.playOut}s`);
+      b.style.setProperty('--play-ease', cfg.playEase);
+      b.style.setProperty('--play-scale-from', cfg.playScaleFrom);
+      b.style.setProperty('--play-fade-from', cfg.playFadeFrom);
+    });
+    glow.style.setProperty('--glow-colour', cfg.glowMatch === 'custom' ? cfg.glowColour : cfg.playColour);
+    glow.style.setProperty('--glow-r', `${cfg.glowRadius}px`);
+    glow.style.setProperty('--glow-core', `${Math.round(cfg.glowCore * 100)}%`);
+    glow.style.setProperty('--glow-strength', cfg.glowStrength);
+    glow.style.setProperty('--glow-in', `${cfg.playIn}s`);
+    glow.style.setProperty('--glow-out', `${cfg.playOut}s`);
+    glow.style.setProperty('--play-ease', cfg.playEase);
+    if (hintTextNow !== cfg.hintText) {
+      hintTextNow = cfg.hintText;
+      hint.replaceChildren();
+      letters(hint, cfg.hintText);   // one span per letter, for the wave
+      hintWave.remeasure();
+    }
+    hint.style.fontSize = `${cfg.hintSize}px`;
+    hint.style.lineHeight = `${cfg.hintLeading}px`;
   }
 
   /* ---------- api ---------- */
@@ -375,6 +623,14 @@ export function createOpenRoad(el, config, deps) {
     if (next.text !== prev.text) build();
     computeGeometry();
     render(progress);
+    // A changed wave setting plays it again (if the hint is up).
+    hintWave.configure(prev, next);
+    hintWave.update(hintShown ? 0 : Infinity, 1, cfg);
+    if (next.hintRepeat !== prev.hintRepeat || next.wave !== prev.wave) repeatHint();
+    // A new delay restarts the wait; turning it off (or a new look) applies now.
+    if (next.hintDelay !== prev.hintDelay) { clearTimeout(hintTimer); hintTimer = 0; }
+    if (hintShown) showHint(cfg.hint === 'on' && !scrolled, true);
+    syncHint();
   }
 
   trail.setOptions(cfg);
@@ -382,10 +638,11 @@ export function createOpenRoad(el, config, deps) {
   build();
   computeGeometry();
   render(0);
+  showHint(false, true);
   if (document.fonts) document.fonts.ready.then(() => { computeGeometry(); render(progress); });
 
   return {
-    seek(p) { progress = p; render(p); },
+    seek(p) { progress = p; render(p); syncHint(); },
     setConfig,
     relayout() { computeGeometry(); render(progress); },
     anchor(which) {
@@ -417,7 +674,15 @@ export function createOpenRoad(el, config, deps) {
       trail.reset(art);
     },
     trail,
-    destroy() { reveals.forEach((r) => r.destroy()); io.disconnect(); video.pause(); trail.destroy(); el.classList.remove('road'); art.remove(); line.remove(); },
+    destroy() {
+      reveals.forEach((r) => r.destroy()); io.disconnect(); video.pause(); trail.destroy();
+      clearTimeout(hintTimer);
+      if (spring.raf) cancelAnimationFrame(spring.raf);
+      hintWave.destroy(); clearInterval(hintRepeatTimer);
+      removeEventListener('pointermove', onMove); document.removeEventListener('pointerout', onOut);
+      canHover.removeEventListener('change', paintPlay);
+      el.classList.remove('road'); [art, line, title, play, badge, hint, cursor].forEach((n) => n.remove());
+    },
     get config() { return cfg; },
   };
 }
@@ -487,6 +752,79 @@ export const OPEN_ROAD_DEFAULTS = {
   radius: 0,
   bg: '#ffffff',
   fg: '#000000',
+
+  // Headline over the hero (the same type as the line above). It fades,
+  // blurs and sinks away between titleFrom and titleTo — shares of this
+  // section's scroll, so it follows the scroll both ways.
+  title: 'Our story starts here.',
+  titleColour: '#ffffff',
+  titleSize: 0,              // px; 0 = the same size as the line (it scales with it)
+  titleFrom: 0.005,          // starts to go after this much of the section…
+  titleTo: 0.05,             // …and is gone by this much
+  titleBlur: 6,              // px at the end
+  titleRise: 12,             // px it sinks as it goes
+  titlePad: 24,              // px kept clear either side inside the hero (it wraps)
+  titleShade: 0.2,           // darkening over the picture while the headline is up
+  titleShadeColour: '#000000',
+
+  // Play: the cursor over the hero (a button under the headline on touch)
+  play: 'on',
+  playUntil: 0.05,           // share of the section it stays clickable for
+  playSize: 72,              // px (Figma: Icon Button, 72)
+  playColour: '#AC74FC',
+  playShadow: '#4A6B3C',     // its 2px drop shadow
+  playGap: 40,               // px from the headline to the badge (touch)
+  // How it comes in and goes out (entering and leaving the hero; on touch,
+  // appearing and going as the scroll passes playUntil)
+  playIn: 0.35,              // s, scaling up and fading in
+  playOut: 0.25,             // s, scaling down and fading out
+  playScaleFrom: 0.4,        // its size when out, × full
+  playFadeFrom: 0,           // its opacity when out
+  playEase: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  // Alive: it tilts, sways and stretches with the pointer's motion, on a spring
+  playAlive: 'on',
+  playTilt: 22,              // deg it leans towards its direction of travel, at full speed
+  playSpin: 14,              // deg it sways round with sideways movement, at full speed
+  playStretch: 0.12,         // how much it stretches along its path, at full speed
+  playSpeed: 1800,           // px/s of pointer movement that gives the full effect
+  playResponse: 14,          // how quickly it answers (higher = snappier)
+  playWobble: 0.45,          // how much it overshoots as it settles (0 = none)
+  // The glow it casts on the headline (the letters only, never the picture)
+  glow: 'on',
+  glowMatch: 'button',       // 'button' = the play button's colour | 'custom'
+  glowColour: '#AC74FC',
+  glowRadius: 260,           // px, how far the light reaches
+  glowCore: 0.1,             // share of that radius at full strength, before it falls off
+  glowStrength: 0.9,         // 0–1
+
+  // The full film (film.js): '' plays the hero video
+  film: '',
+  films: [],                 // set by the loader (src/assets/film/)
+  filmIdle: 2,               // s the mouse is still before the close button fades away
+  filmFade: 0.3,             // s the film fades in and out
+  filmBg: '#000000',
+
+  // Scroll hint, for someone who hasn't scrolled yet
+  hint: 'on',
+  hintText: 'Scroll to begin the journey.',
+  hintDelay: 10,             // s at the top, unscrolled, before it shows
+  hintGap: 33,               // px below the hero
+  hintSize: 14,
+  hintLeading: 20,
+  hintIn: 0.3,               // s fading in (like Platform verticals' statistics)
+  hintOut: 0.18,             // s fading out
+  hintRise: 12,              // px it rises as it comes in
+  hintBlur: 6,               // px it comes into focus from
+  hintEase: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  // …and as it comes in, its colour wave (colorWave.js, as on "Start small"):
+  // it arrives purple and settles to black, letter by letter.
+  hintRepeat: 5,             // s between flashes while it's up (0 = just the once)
+  ...WAVE_DEFAULTS,
+  waveFrom: '#AC74FC',
+  waveColour: '#AC74FC',
+  waveTo: '#000000',
+  waveDuration: 0.9,
+  waveSpread: 0.6,
 };
 
 /* Phone starting values (below 768 px wide), applied over the desktop ones.
@@ -501,4 +839,8 @@ export const OPEN_ROAD_MOBILE = {
   heroShape: '9:16',
   heroWidth: 68,
   trail: 'off',
+  titlePad: 16,
+  titleSize: 40,             // the line's 56 would wrap to four lines in the portrait hero
+  playSize: 64,
+  playGap: 24,
 };

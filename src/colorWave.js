@@ -14,6 +14,7 @@
      w.update(top, H, cfg)    every frame: the text's top on screen (px), or
                               Infinity while it can't be seen yet
      w.configure(prev, next)  in setConfig, to replay on a changed setting
+     w.replay(from)           play it again now (from `from`, else waveFrom)
    Settings are the `wave*` keys of the beat's own config (WAVE_DEFAULTS). */
 
 export const WAVE_DEFAULTS = {
@@ -72,6 +73,7 @@ export function letters(el, text) {
 export function createColorWave(el) {
   let cfg = WAVE_DEFAULTS;
   let t0 = null, raf = 0, chars = null;
+  let fromNow = null;   // a replay's start colour, instead of waveFrom
   // The settings the text was last painted at rest (before or after the
   // wave) with: while nothing changes, scrolling doesn't repaint it.
   let restFor = null;
@@ -106,7 +108,7 @@ export function createColorWave(el) {
   function paint(now) {
     if (!chars || (chars.length && !chars[0].e.isConnected)) measure();
     const on = cfg.wave === 'on';
-    const from = hexRgb(cfg.waveFrom), mid = hexRgb(cfg.waveColour), to = hexRgb(cfg.waveTo);
+    const from = hexRgb(fromNow ?? cfg.waveFrom), mid = hexRgb(cfg.waveColour), to = hexRgb(cfg.waveTo);
     const ease = EASE[cfg.waveEase] || EASE.smooth;
     const peak = Math.min(0.95, Math.max(0.05, cfg.wavePeak));
     const t = t0 == null ? -Infinity : reduced.matches ? Infinity : (now - t0) / 1000 - cfg.waveDelay;
@@ -150,8 +152,17 @@ export function createColorWave(el) {
       restFor = resting ? cfg : null;
     },
     configure(prev, next) {
-      if (WAVE_KEYS.some((k) => next[k] !== prev[k])) t0 = null;
+      if (WAVE_KEYS.some((k) => next[k] !== prev[k])) { t0 = null; fromNow = null; }
       restFor = null;
+    },
+    // Play it again now, starting from `from` (e.g. the end colour, so a
+    // repeat ripples out of the settled text instead of jumping back).
+    replay(from = null) {
+      if (cfg.wave !== 'on') return;
+      fromNow = from;
+      t0 = performance.now();
+      restFor = null;
+      if (!raf) raf = requestAnimationFrame(tick);
     },
     destroy() { cancelAnimationFrame(raf); },
   };

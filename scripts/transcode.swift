@@ -1,13 +1,15 @@
-// Transcode a video to H.264 at a maximum width and a target bitrate, with no
-// audio (the hero is muted). Used by optimize-media.mjs.
-//   transcode <in> <out> <maxWidth> <bitsPerSecond>
+// Transcode a video to H.264 at a maximum width and a target bitrate. No
+// audio (the hero is muted), unless a fifth argument, `audio`, asks for the
+// sound to be kept as AAC (the full film). Used by optimize-media.mjs.
+//   transcode <in> <out> <maxWidth> <bitsPerSecond> [audio]
 import AVFoundation
 import Foundation
 
 let a = CommandLine.arguments
-guard a.count == 5, let maxW = Double(a[3]), let bps = Int(a[4]) else {
-  FileHandle.standardError.write("usage: transcode <in> <out> <maxWidth> <bitsPerSecond>\n".data(using: .utf8)!); exit(2)
+guard a.count == 5 || a.count == 6, let maxW = Double(a[3]), let bps = Int(a[4]) else {
+  FileHandle.standardError.write("usage: transcode <in> <out> <maxWidth> <bitsPerSecond> [audio]\n".data(using: .utf8)!); exit(2)
 }
+let keepAudio = a.count == 6 && a[5] == "audio"
 let inURL = URL(fileURLWithPath: a[1]), outURL = URL(fileURLWithPath: a[2])
 try? FileManager.default.removeItem(at: outURL)
 
@@ -39,17 +41,39 @@ input.transform = track.preferredTransform
 input.expectsMediaDataInRealTime = false
 writer.add(input)
 
+// The sound, decoded to PCM and re-encoded as stereo AAC.
+var audioPair: (AVAssetReaderTrackOutput, AVAssetWriterInput)? = nil
+if keepAudio, let at = asset.tracks(withMediaType: .audio).first {
+  let out = AVAssetReaderTrackOutput(track: at, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
+  reader.add(out)
+  let ain = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+    AVFormatIDKey: kAudioFormatMPEG4AAC, AVNumberOfChannelsKey: 2, AVSampleRateKey: 48000, AVEncoderBitRateKey: 160_000,
+  ])
+  ain.expectsMediaDataInRealTime = false
+  writer.add(ain)
+  audioPair = (out, ain)
+}
+
 reader.startReading()
 writer.startWriting()
 writer.startSession(atSourceTime: .zero)
-let q = DispatchQueue(label: "transcode")
-let done = DispatchSemaphore(value: 0)
-input.requestMediaDataWhenReady(on: q) {
-  while input.isReadyForMoreMediaData {
-    if let buf = readerOut.copyNextSampleBuffer() { input.append(buf) }
-    else { input.markAsFinished(); writer.finishWriting { done.signal() }; return }
+// Each track is pumped on its own queue; the file is finished when both are.
+let group = DispatchGroup()
+func pump(_ out: AVAssetReaderTrackOutput, _ inp: AVAssetWriterInput, _ label: String) {
+  group.enter()
+  var finished = false
+  inp.requestMediaDataWhenReady(on: DispatchQueue(label: label)) {
+    while inp.isReadyForMoreMediaData && !finished {
+      if let buf = out.copyNextSampleBuffer() { inp.append(buf) }
+      else { finished = true; inp.markAsFinished(); group.leave() }
+    }
   }
 }
+pump(readerOut, input, "video")
+if let (out, ain) = audioPair { pump(out, ain, "audio") }
+group.wait()
+let done = DispatchSemaphore(value: 0)
+writer.finishWriting { done.signal() }
 done.wait()
 if writer.status != .completed { FileHandle.standardError.write("failed: \(String(describing: writer.error))\n".data(using: .utf8)!); exit(1) }
 print("\(outW)x\(outH)")

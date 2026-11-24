@@ -97,6 +97,17 @@ A lens follows the cursor over the isometric platform, after Atelier UI's [Lens 
   - Sizes are shares of the platform's height.
 - **In the explore modal:** the same lens shows on hover over every picture except each layer's top one (`src/mediaLens.js`, plain WebGL so the modal doesn't need three.js). One shared canvas is laid over the hovered picture and draws it as the page does (cover or contain, at its focus point), so images, videos and transparent PNGs all work. It uses the settings above, with sizes as shares of the picture's height. Turn it off with Isometric platform → Explore modal → **Picture hover**.
 
+### Hero: headline, play and the scroll hint
+
+Open road's hero has three extras at the very start (Open road → Content):
+
+- **Headline over the hero** ("Our story starts here."): the same type as the line, white, centred on the picture with a light shade behind it. As the scroll begins it fades, blurs and sinks away between *Starts going after* and *Gone by* (shares of the section's scroll, so it follows the scroll both ways). *Size* 0 keeps it the same as the line; phones start at 40 px.
+- **Play & full film**: over the hero the cursor becomes the purple play button (Figma: Icon Button / Play); on touch, or with keyboard focus, it's a button under the headline. Clicking opens the full film over the whole window (`src/film.js`), with sound and the browser's controls; its close button shows while the mouse moves and fades away after *Close button hides after* seconds of stillness. Escape or the end of the film closes it. *Film* picks an upload from `src/assets/film/` (*Upload film…*); with none it plays the hero video. Film copies keep their audio.
+  - *Coming in & going out*: the button scales up from *Size when out* and fades in from *Opacity when out* as the cursor enters the hero (over *Comes in over*, with *Ease*), and back down and out as it leaves (*Goes out over*). On touch the badge does the same as it appears and goes with the scroll.
+  - *Alive*: like Platform verticals' cursor, the button answers the mouse's motion. It tilts in 3D towards where it's going (*Tilt*), turns a little with sideways movement (*Sway*) and stretches along its path (*Stretch*), on a spring that follows the pointer's speed (*Full effect at*), so it leans in, overshoots a touch (*Wobble*) and settles flat (*Response*). Its position stays exactly on the pointer. Off for reduced motion.
+  - *Glow on the headline*: the button lights the headline's letters around it, in its own colour or a custom one. It's a copy of the words over themselves, painted with a radial gradient centred on the button and clipped to the letters (`background-clip: text`), so the picture is never touched. *Reach*, *Hot spot* and *Strength* tune it; it comes and goes with the button.
+- **Scroll hint** ("Scroll to begin the journey."): for someone who hasn't scrolled yet, it fades in under the hero after *Shows after* seconds (10 by default), like Platform verticals' statistics, and the first scroll sends it away for good. As it comes in it flashes purple and settles to black letter by letter: the colour wave from "Start small" (`colorWave.js`), started when the hint appears rather than by the scroll (Open road → Content → *Scroll hint: colour wave*). While it's up the ripple runs again every *Repeats every* seconds (5 by default), out of black, through the purple and back, to catch the eye.
+
 ### Explore modal
 
 The platform's **Explore** buttons open a modal (`src/modal.js`), after pda.archi/expertises:

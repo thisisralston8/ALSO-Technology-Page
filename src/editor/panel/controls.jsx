@@ -323,22 +323,32 @@ function ImageControl({ api, row }) {
   );
 }
 
+// Hero videos by default. `row.list: 'films'` picks the full film instead
+// (its own folder, kept with sound), with `row.none` as a first tile that
+// clears the choice.
 function VideoControl({ api, row }) {
   const v = api.read(row.p);
-  const vids = api.cfg.videos || [];
+  const film = row.list === 'films';
+  const vids = api.cfg[row.list || 'videos'] || [];
+  const pick = (stem) => api.writeKeys(film ? { [row.p]: stem } : { [row.p]: stem, heroMedia: 'video' });
   return (
     <Stack api={api} row={row}>
       <div className="grid grid-cols-4 gap-2" role="group" aria-label={row.label}>
+        {row.none && (
+          <Tile label={row.none} selected={!v} onPress={() => pick('')}>
+            <span className="px-1 text-center text-xs leading-tight text-muted">{row.none}</span>
+          </Tile>
+        )}
         {vids.map((it) => (
           <Tile key={it.stem} label={it.stem} image={it.poster} selected={it.stem === v}
-            onPress={() => api.writeKeys({ [row.p]: it.stem, heroMedia: 'video' })}>
+            onPress={() => pick(it.stem)}>
             {!it.poster && <Play />}
           </Tile>
         ))}
       </div>
       {api.host.uploadVideo && (
-        <Uploader accept="video/*,.mov,.mp4,.webm,.m4v" label="Upload video…"
-          onFile={async (f, status) => { const out = await api.host.uploadVideo(f, status); api.refresh(); return out.saved ? '' : visitOnly; }} />
+        <Uploader accept="video/*,.mov,.mp4,.webm,.m4v" label={film ? 'Upload film…' : 'Upload video…'}
+          onFile={async (f, status) => { const out = await api.host.uploadVideo(f, status, film ? 'film' : 'video'); api.refresh(); return out.saved ? '' : visitOnly; }} />
       )}
     </Stack>
   );

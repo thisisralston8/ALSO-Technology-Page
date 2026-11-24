@@ -12,6 +12,8 @@ import { optimizeAll, optimizeImage, optimizeVideo, optimizeModal } from './scri
 const DEFAULTS = fileURLToPath(new URL('./src/defaults.json', import.meta.url));
 const BACKUP = fileURLToPath(new URL('./src/defaults.prev.json', import.meta.url));
 const VIDEO_DIR = fileURLToPath(new URL('./src/assets/video/', import.meta.url));
+// The full film (Open road's play button): uploaded the same way, kept apart.
+const FILM_DIR = fileURLToPath(new URL('./src/assets/film/', import.meta.url));
 const MODAL_DIR = fileURLToPath(new URL('./src/assets/modal/', import.meta.url));
 const MODAL_OPT_DIR = fileURLToPath(new URL('./src/assets/optimized/modal/', import.meta.url));
 // Uploads land here first, outside anything Vite watches, and are moved into
@@ -75,6 +77,7 @@ function uploadVideo() {
         const stem = q.get('stem') || '';
         const part = q.get('part');
         const ext = (q.get('ext') || '').toLowerCase();
+        const DIR = q.get('folder') === 'film' ? FILM_DIR : VIDEO_DIR;
         if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(stem)) return fail(400, 'bad name');
         if (part !== 'poster' && part !== 'video') return fail(400, 'bad part');
         if (part === 'video' && !VIDEO_EXT.includes(ext)) return fail(400, `use ${VIDEO_EXT.join(', ')}`);
@@ -84,13 +87,14 @@ function uploadVideo() {
           const name = part === 'poster' ? `${stem}.jpg` : `${stem}.${ext}`;
           if (part === 'video') {
             // Never overwrite a video that's already there.
-            const exists = await Promise.any(VIDEO_EXT.map((e) => access(VIDEO_DIR + `${stem}.${e}`))).then(() => true, () => false);
+            const exists = await Promise.any(VIDEO_EXT.map((e) => access(DIR + `${stem}.${e}`))).then(() => true, () => false);
             if (exists) { req.resume(); return fail(409, 'a video with that name already exists'); }
           }
           await pipeline(req, createWriteStream(UPLOAD_TMP + name));
           if (part === 'video') {
-            await rename(UPLOAD_TMP + name, VIDEO_DIR + name);
-            await rename(UPLOAD_TMP + `${stem}.jpg`, VIDEO_DIR + `${stem}.jpg`).catch(() => {});
+            await mkdir(DIR, { recursive: true });
+            await rename(UPLOAD_TMP + name, DIR + name);
+            await rename(UPLOAD_TMP + `${stem}.jpg`, DIR + `${stem}.jpg`).catch(() => {});
           }
           res.setHeader('content-type', 'application/json');
           res.end(JSON.stringify({ ok: true, stem }));
@@ -243,6 +247,7 @@ function optimizedMedia() {
         if (rel.startsWith('..') || path.basename(file).startsWith('.')) return;
         if (dir === 'traffic') enqueue(() => optimizeImage(file, dir, log));
         else if (dir === 'video') enqueue(() => optimizeVideo(file, log));
+        else if (dir === 'film') enqueue(() => optimizeVideo(file, log, 'film'));
         else if (dir === 'modal' && path.dirname(rel) === 'modal') enqueue(() => optimizeModal(file, log));
       };
       server.watcher.on('add', onFile);

@@ -7,6 +7,8 @@
      src/assets/modal/<image>        →  src/assets/optimized/modal/<stem>.jpg          (2400 px long edge;
                                          .png instead when it has transparency)
      src/assets/modal/<video>        →  src/assets/optimized/modal/<stem>.{desktop,mobile}.mp4
+     src/assets/film/<video>         →  src/assets/optimized/film/<stem>.{desktop,mobile}.mp4
+                                         (the full film, played with sound: these keep the audio)
 
    Uses only what ships with macOS: AVFoundation (a small Swift transcoder,
    compiled once into node_modules/.cache) and `sips`. Up-to-date copies are
@@ -57,6 +59,9 @@ async function transcoder() {
   return built;
 }
 
+// The full film (Open road's play button) is watched with sound.
+const WITH_AUDIO = new Set(['film']);
+
 export async function optimizeVideo(file, log = console.log, folder = 'video') {
   if (!VIDEO_EXT.includes(path.extname(file).toLowerCase())) return;
   const outDir = A('optimized', folder);
@@ -69,10 +74,12 @@ export async function optimizeVideo(file, log = console.log, folder = 'video') {
     const t0 = Date.now();
     const tmp = tmpFor(out);
     await rm(tmp, { force: true });
-    const { stdout } = await run(bin, [file, tmp, String(v.width), String(v.bps)], { maxBuffer: 1 << 20 });
-    // An MP4 that's already lighter than the re-encode is used as it is.
+    const sound = WITH_AUDIO.has(folder);
+    const { stdout } = await run(bin, [file, tmp, String(v.width), String(v.bps), ...(sound ? ['audio'] : [])], { maxBuffer: 1 << 20 });
+    // An MP4 that's already lighter than the re-encode is used as it is
+    // (not for the film: an original might carry sound the browser can't play).
     const [outSize, srcSize] = [(await stat(tmp)).size, (await stat(file)).size];
-    const keep = path.extname(file).toLowerCase() === '.mp4' && srcSize < outSize;
+    const keep = !sound && path.extname(file).toLowerCase() === '.mp4' && srcSize < outSize;
     if (keep) await copyFile(file, tmp);
     await rename(tmp, out);
     const kb = Math.round(Math.min(outSize, keep ? srcSize : outSize) / 1024);
@@ -110,6 +117,7 @@ export async function optimizeAll(log = console.log) {
   const list = (dir) => readdir(A(dir)).then((fs) => fs.filter((f) => !f.startsWith('.')).map((f) => A(dir, f)), () => []);
   for (const f of await list('traffic')) await optimizeImage(f, 'traffic', log);
   for (const f of await list('video')) await optimizeVideo(f, log);
+  for (const f of await list('film')) await optimizeVideo(f, log, 'film');
   for (const f of await list('modal')) {
     await optimizeImage(f, 'modal', log);
     await optimizeVideo(f, log, 'modal');
